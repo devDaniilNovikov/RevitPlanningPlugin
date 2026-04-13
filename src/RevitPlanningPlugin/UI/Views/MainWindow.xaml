@@ -1,0 +1,307 @@
+<Window x:Class="RevitPlanningPlugin.UI.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:converters="clr-namespace:RevitPlanningPlugin.UI.Converters"
+        xmlns:enums="clr-namespace:RevitPlanningPlugin.Models.Enums"
+        xmlns:sys="clr-namespace:System;assembly=mscorlib"
+        mc:Ignorable="d"
+        Title="Генератор планировок" 
+        Width="820" Height="700"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResize"
+        MinWidth="650" MinHeight="500"
+        Background="#F5F5F5">
+
+    <Window.Resources>
+        <converters:StatusToColorConverter x:Key="StatusToColor"/>
+        <converters:NullToVisibilityConverter x:Key="NullToVisibility"/>
+        <converters:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+
+        <ObjectDataProvider x:Key="ApiEnvironmentValues" MethodName="GetValues"
+                            ObjectType="{x:Type sys:Enum}">
+            <ObjectDataProvider.MethodParameters>
+                <x:Type TypeName="enums:ApiEnvironment"/>
+            </ObjectDataProvider.MethodParameters>
+        </ObjectDataProvider>
+
+        <Style x:Key="SectionHeader" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,8,0,4"/>
+            <Setter Property="Foreground" Value="#333"/>
+        </Style>
+
+        <Style x:Key="ActionButton" TargetType="Button">
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="Margin" Value="4"/>
+            <Setter Property="Background" Value="#2196F3"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}"
+                                CornerRadius="4" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#1976D2"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Background" Value="#BDBDBD"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource ActionButton}">
+            <Setter Property="Background" Value="#757575"/>
+        </Style>
+
+        <Style x:Key="SuccessButton" TargetType="Button" BasedOn="{StaticResource ActionButton}">
+            <Setter Property="Background" Value="#4CAF50"/>
+        </Style>
+
+        <Style x:Key="CardBorder" TargetType="Border">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12"/>
+            <Setter Property="Margin" Value="0,4"/>
+            <Setter Property="BorderBrush" Value="#E0E0E0"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="Генератор планировок" FontSize="20" FontWeight="Bold" Foreground="#1565C0"/>
+            <Border Background="{Binding Status, Converter={StaticResource StatusToColor}}" 
+                    CornerRadius="4" Padding="8,4" Margin="0,8,0,0">
+                <TextBlock Text="{Binding StatusMessage}" Foreground="White" FontSize="12"/>
+            </Border>
+        </StackPanel>
+
+        <TabControl Grid.Row="1" Margin="0,12,0,0">
+
+            <TabItem Header="  Подключение  ">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
+                    <StackPanel>
+                        <Border Style="{StaticResource CardBorder}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource SectionHeader}" Text="Настройки API"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="140"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Base URL:" VerticalAlignment="Center" Margin="0,4"/>
+                                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Settings.BaseUrl, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Окружение:" VerticalAlignment="Center" Margin="0,4"/>
+                                    <ComboBox Grid.Row="1" Grid.Column="1" SelectedItem="{Binding Settings.Environment}" ItemsSource="{Binding Source={StaticResource ApiEnvironmentValues}}" Margin="4"/>
+
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="API Key:" VerticalAlignment="Center" Margin="0,4"/>
+                                    <PasswordBox Grid.Row="2" Grid.Column="1" Margin="4" x:Name="ApiKeyBox"/>
+
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Bearer Token:" VerticalAlignment="Center" Margin="0,4"/>
+                                    <PasswordBox Grid.Row="3" Grid.Column="1" Margin="4" x:Name="TokenBox"/>
+
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Таймаут (сек):" VerticalAlignment="Center" Margin="0,4"/>
+                                    <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding Settings.RequestTimeoutSeconds}" Margin="4" Width="80" HorizontalAlignment="Left"/>
+                                </Grid>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <Button Content="Сохранить" Style="{StaticResource ActionButton}" Command="{Binding SaveSettingsCommand}"/>
+                                    <Button Content="Проверить соединение" Style="{StaticResource SecondaryButton}" Command="{Binding TestConnectionCommand}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="  Контуры  ">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Button Grid.Row="0" Content="Загрузить список контуров" Style="{StaticResource ActionButton}" HorizontalAlignment="Left" Command="{Binding LoadContoursCommand}"/>
+
+                    <ListBox Grid.Row="1" Margin="0,8" ItemsSource="{Binding AvailableContours}" SelectedItem="{Binding SelectedContourSummary}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" Margin="4,2">
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Width="200"/>
+                                    <TextBlock Text="{Binding Area, StringFormat='{}{0:F1} м²'}" Foreground="#666" Margin="8,0,0,0"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <Button Grid.Row="2" Content="Загрузить выбранный контур" Style="{StaticResource SuccessButton}" HorizontalAlignment="Left" Command="{Binding LoadSelectedContourCommand}"/>
+
+                    <Border Grid.Row="3" Style="{StaticResource CardBorder}" Margin="0,8,0,0">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionHeader}" Text="Информация о контуре"/>
+                            <TextBlock Text="{Binding ContourInfo}" TextWrapping="Wrap"/>
+                            <TextBlock Text="{Binding ValidationMessages}" Foreground="OrangeRed" TextWrapping="Wrap" Margin="0,4,0,0" Visibility="{Binding ValidationResult, Converter={StaticResource NullToVisibility}}"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="  Генерация  ">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
+                    <StackPanel>
+                        <Border Style="{StaticResource CardBorder}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource SectionHeader}" Text="Параметры генерации"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="220"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center">
+                                        <Run Text="Количество вариантов: "/><Run Text="{Binding GenerationParams.VariantCount, Mode=OneWay}"/>
+                                    </TextBlock>
+                                    <Slider Grid.Row="0" Grid.Column="1" Minimum="1" Maximum="10" Value="{Binding GenerationParams.VariantCount}" IsSnapToTickEnabled="True" TickFrequency="1" TickPlacement="BottomRight" Margin="4,8"/>
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Мин. площадь помещения (м²):" VerticalAlignment="Center"/>
+                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding GenerationParams.MinRoomArea}" Margin="4" Width="80" HorizontalAlignment="Left"/>
+
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Макс. площадь помещения (м²):" VerticalAlignment="Center"/>
+                                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding GenerationParams.MaxRoomArea}" Margin="4" Width="80" HorizontalAlignment="Left"/>
+
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Мин. ширина коридора (м):" VerticalAlignment="Center"/>
+                                    <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding GenerationParams.MinCorridorWidth}" Margin="4" Width="80" HorizontalAlignment="Left"/>
+
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Приоритет оптимизации:" VerticalAlignment="Center"/>
+                                    <ComboBox Grid.Row="4" Grid.Column="1" Margin="4" Width="160" HorizontalAlignment="Left" SelectedValue="{Binding GenerationParams.OptimizationPriority}" SelectedValuePath="Content">
+                                        <ComboBoxItem Content="efficiency"/>
+                                        <ComboBoxItem Content="area"/>
+                                        <ComboBoxItem Content="rooms"/>
+                                    </ComboBox>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <Button Content="Сгенерировать варианты" Style="{StaticResource SuccessButton}" HorizontalAlignment="Left" Margin="0,8" Command="{Binding GenerateCommand}"/>
+
+                        <StackPanel Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" Margin="0,8">
+                            <ProgressBar IsIndeterminate="True" Height="4" Foreground="#2196F3"/>
+                            <TextBlock Text="{Binding StatusMessage}" Foreground="#666" Margin="0,4,0,0" FontSize="12"/>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="  Результаты  ">
+                <Grid Margin="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="260"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0" Style="{StaticResource CardBorder}" Margin="0,0,8,0">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Style="{StaticResource SectionHeader}" Text="Варианты"/>
+                            <ListBox ItemsSource="{Binding Variants}" SelectedItem="{Binding SelectedVariant}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Padding="6" Margin="0,2" BorderBrush="#EEE" BorderThickness="0,0,0,1">
+                                            <StackPanel>
+                                                <TextBlock FontWeight="SemiBold" FontSize="13">
+                                                    <Run Text="Вариант #"/><Run Text="{Binding VariantIndex, Mode=OneWay}"/>
+                                                </TextBlock>
+                                                <TextBlock FontSize="11" Foreground="#666" Margin="0,2,0,0">
+                                                    <Run Text="S = "/><Run Text="{Binding TotalArea, StringFormat='{}{0:F1}', Mode=OneWay}"/><Run Text=" м²  |  "/><Run Text="{Binding RoomCount, Mode=OneWay}"/><Run Text=" пом."/>
+                                                </TextBlock>
+                                                <TextBlock FontSize="11" Foreground="#1565C0" Margin="0,1,0,0">
+                                                    <Run Text="Score: "/><Run Text="{Binding EfficiencyScore, StringFormat='{}{0:F0}', Mode=OneWay}"/><Run Text="  |  Коэфф: "/><Run Text="{Binding UsableRatio, StringFormat='{}{0:P0}', Mode=OneWay}"/>
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </DockPanel>
+                    </Border>
+
+                    <Border Grid.Column="1" Style="{StaticResource CardBorder}">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Style="{StaticResource SectionHeader}" Text="Детали варианта"/>
+                            <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                                <TextBlock Text="{Binding VariantInfo}" TextWrapping="Wrap" FontSize="12"/>
+                            </StackPanel>
+
+                            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,12,0,0">
+                                <Button Content="Применить (разделители)" Style="{StaticResource SuccessButton}" Command="{Binding ApplyVariantCommand}"/>
+                                <Button Content="Применить со стенами" Style="{StaticResource ActionButton}" Command="{Binding ApplyWithWallsCommand}"/>
+                            </StackPanel>
+
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding SelectedVariant.Rooms}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="#E8E8E8" BorderThickness="0,0,0,1" Padding="4,6">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="100"/>
+                                                        <ColumnDefinition Width="80"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0" Text="{Binding Name}" FontWeight="SemiBold" FontSize="12"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding Type}" Foreground="#888" FontSize="11"/>
+                                                    <TextBlock Grid.Column="2" Foreground="#444" FontSize="12" HorizontalAlignment="Right">
+                                                        <Run Text="{Binding Area, StringFormat='{}{0:F1}', Mode=OneWay}"/><Run Text=" м²"/>
+                                                    </TextBlock>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </Border>
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+            <Button Content="Отмена операции" Style="{StaticResource SecondaryButton}" Command="{Binding CancelCommand}" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}"/>
+        </StackPanel>
+    </Grid>
+</Window>
