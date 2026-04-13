@@ -59,10 +59,23 @@ namespace RevitPlanningPlugin.Services.Geometry
                 Type = s.Type,
                 Start = MetersToRevit(s.Start),
                 End = MetersToRevit(s.End),
+                // Arc
                 ArcCenter = s.ArcCenter != null ? MetersToRevit(s.ArcCenter) : null,
                 ArcRadius = s.ArcRadius.HasValue ? MetersToRevit(s.ArcRadius.Value) : null,
                 ArcClockwise = s.ArcClockwise,
-                SplineControlPoints = s.SplineControlPoints?.Select(MetersToRevit).ToList()
+                // Spline / NURBS control points
+                SplineControlPoints = s.SplineControlPoints?.Select(MetersToRevit).ToList(),
+                // NURBS scalar parameters (unitless)
+                NurbsWeights = s.NurbsWeights != null ? new List<double>(s.NurbsWeights) : null,
+                NurbsKnots  = s.NurbsKnots  != null ? new List<double>(s.NurbsKnots)  : null,
+                NurbsDegree = s.NurbsDegree,
+                // Ellipse (center and radii need unit conversion; angles are unitless)
+                EllipseCenter     = s.EllipseCenter != null ? MetersToRevit(s.EllipseCenter) : null,
+                EllipseRadiusX    = s.EllipseRadiusX.HasValue ? MetersToRevit(s.EllipseRadiusX.Value) : null,
+                EllipseRadiusY    = s.EllipseRadiusY.HasValue ? MetersToRevit(s.EllipseRadiusY.Value) : null,
+                EllipseRotation   = s.EllipseRotation,
+                EllipseStartAngle = s.EllipseStartAngle,
+                EllipseEndAngle   = s.EllipseEndAngle
             }).ToList();
         }
 
@@ -74,11 +87,17 @@ namespace RevitPlanningPlugin.Services.Geometry
             {
                 ScalePoint(seg.Start, factor);
                 ScalePoint(seg.End, factor);
+                // Arc
                 if (seg.ArcCenter != null) ScalePoint(seg.ArcCenter, factor);
                 if (seg.ArcRadius.HasValue) seg.ArcRadius *= factor;
+                // Spline / NURBS control points
                 if (seg.SplineControlPoints != null)
                     foreach (var pt in seg.SplineControlPoints)
                         ScalePoint(pt, factor);
+                // Ellipse (center and radii are dimensional; angles are unitless)
+                if (seg.EllipseCenter != null) ScalePoint(seg.EllipseCenter, factor);
+                if (seg.EllipseRadiusX.HasValue) seg.EllipseRadiusX *= factor;
+                if (seg.EllipseRadiusY.HasValue) seg.EllipseRadiusY *= factor;
             }
         }
 

@@ -59,7 +59,8 @@ namespace RevitPlanningPlugin.Models.Domain
                     case SegmentType.Arc:
                         if (ArcCenter != null && ArcRadius.HasValue)
                         {
-                            // Длина дуги = R * θ
+                            // Длина дуги = R * θ.
+                            // Направление (ArcClockwise) определяет, какой угловой промежуток брать.
                             double r = ArcRadius.Value;
                             var dx1 = Start.X - ArcCenter.X;
                             var dy1 = Start.Y - ArcCenter.Y;
@@ -67,9 +68,18 @@ namespace RevitPlanningPlugin.Models.Domain
                             var dy2 = End.Y - ArcCenter.Y;
                             var angle1 = Math.Atan2(dy1, dx1);
                             var angle2 = Math.Atan2(dy2, dx2);
-                            var sweep = Math.Abs(angle2 - angle1);
-                            if (sweep > Math.PI) sweep = 2 * Math.PI - sweep;
-                            return r * sweep;
+                            double sweep = angle2 - angle1;
+                            if (ArcClockwise)
+                            {
+                                // CW: угол убывает; нормализуем в (-2π, 0]
+                                if (sweep > 0) sweep -= 2 * Math.PI;
+                            }
+                            else
+                            {
+                                // CCW: угол возрастает; нормализуем в [0, 2π)
+                                if (sweep < 0) sweep += 2 * Math.PI;
+                            }
+                            return r * Math.Abs(sweep);
                         }
                         return Start.DistanceTo(End);
 
