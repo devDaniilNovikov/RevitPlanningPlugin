@@ -7,21 +7,20 @@
         xmlns:enums="clr-namespace:RevitPlanningPlugin.Models.Enums"
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
         mc:Ignorable="d"
-        Title="Генератор планировок — Revit" 
-        Width="900" Height="740"
+        Title="Генератор планировок — Revit"
+        Width="960" Height="780"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanResize"
-        MinWidth="700" MinHeight="550"
+        MinWidth="720" MinHeight="580"
         Background="#F5F5F5">
 
     <Window.InputBindings>
-        <!-- Горячие клавиши: ← → для навигации по вариантам -->
         <KeyBinding Key="Right" Command="{Binding NextVariantCommand}"/>
-        <KeyBinding Key="Left" Command="{Binding PreviousVariantCommand}"/>
+        <KeyBinding Key="Left"  Command="{Binding PreviousVariantCommand}"/>
     </Window.InputBindings>
 
     <Window.Resources>
-        <converters:StatusToColorConverter x:Key="StatusToColor"/>
+        <converters:StatusToColorConverter    x:Key="StatusToColor"/>
         <converters:NullToVisibilityConverter x:Key="NullToVisibility"/>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
 
@@ -32,22 +31,29 @@
             </ObjectDataProvider.MethodParameters>
         </ObjectDataProvider>
 
-        <!-- Стили -->
+        <!-- ── Общие стили ── -->
         <Style x:Key="SectionHeader" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontSize"     Value="13"/>
+            <Setter Property="FontWeight"   Value="SemiBold"/>
+            <Setter Property="Margin"       Value="0,8,0,4"/>
+            <Setter Property="Foreground"   Value="#333"/>
+        </Style>
+
+        <Style x:Key="SubHeader" TargetType="TextBlock">
+            <Setter Property="FontSize"   Value="12"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Margin" Value="0,8,0,4"/>
-            <Setter Property="Foreground" Value="#333"/>
+            <Setter Property="Margin"     Value="0,6,0,3"/>
+            <Setter Property="Foreground" Value="#555"/>
         </Style>
 
         <Style x:Key="ActionButton" TargetType="Button">
-            <Setter Property="Padding" Value="16,8"/>
-            <Setter Property="Margin" Value="4"/>
-            <Setter Property="Background" Value="#2196F3"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Padding"          Value="16,8"/>
+            <Setter Property="Margin"           Value="4"/>
+            <Setter Property="Background"       Value="#2196F3"/>
+            <Setter Property="Foreground"       Value="White"/>
+            <Setter Property="BorderThickness"  Value="0"/>
+            <Setter Property="Cursor"           Value="Hand"/>
+            <Setter Property="FontSize"         Value="13"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -76,15 +82,19 @@
             <Setter Property="Background" Value="#4CAF50"/>
         </Style>
 
+        <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource ActionButton}">
+            <Setter Property="Background" Value="#F44336"/>
+        </Style>
+
         <Style x:Key="NavArrowButton" TargetType="Button">
-            <Setter Property="Width" Value="36"/>
-            <Setter Property="Height" Value="36"/>
-            <Setter Property="FontSize" Value="18"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="Background" Value="#E0E0E0"/>
-            <Setter Property="Foreground" Value="#333"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Width"            Value="36"/>
+            <Setter Property="Height"           Value="36"/>
+            <Setter Property="FontSize"         Value="18"/>
+            <Setter Property="FontWeight"       Value="Bold"/>
+            <Setter Property="Background"       Value="#E0E0E0"/>
+            <Setter Property="Foreground"       Value="#333"/>
+            <Setter Property="BorderThickness"  Value="0"/>
+            <Setter Property="Cursor"           Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -104,23 +114,37 @@
         </Style>
 
         <Style x:Key="CardBorder" TargetType="Border">
-            <Setter Property="Background" Value="White"/>
-            <Setter Property="CornerRadius" Value="6"/>
-            <Setter Property="Padding" Value="12"/>
-            <Setter Property="Margin" Value="0,4"/>
-            <Setter Property="BorderBrush" Value="#E0E0E0"/>
-            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Background"       Value="White"/>
+            <Setter Property="CornerRadius"     Value="6"/>
+            <Setter Property="Padding"          Value="12"/>
+            <Setter Property="Margin"           Value="0,4"/>
+            <Setter Property="BorderBrush"      Value="#E0E0E0"/>
+            <Setter Property="BorderThickness"  Value="1"/>
         </Style>
 
-        <!-- Стиль для карточки варианта в каталоге -->
         <Style x:Key="VariantCard" TargetType="Border">
-            <Setter Property="Background" Value="White"/>
-            <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="Padding" Value="8"/>
-            <Setter Property="Margin" Value="4"/>
-            <Setter Property="BorderBrush" Value="#E0E0E0"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Background"       Value="White"/>
+            <Setter Property="CornerRadius"     Value="8"/>
+            <Setter Property="Padding"          Value="8"/>
+            <Setter Property="Margin"           Value="4"/>
+            <Setter Property="BorderBrush"      Value="#E0E0E0"/>
+            <Setter Property="BorderThickness"  Value="1"/>
+            <Setter Property="Cursor"           Value="Hand"/>
+        </Style>
+
+        <!-- Чип-метка (МОП, квартиры) -->
+        <Style x:Key="ChipBorder" TargetType="Border">
+            <Setter Property="CornerRadius"    Value="10"/>
+            <Setter Property="Padding"         Value="8,2"/>
+            <Setter Property="Margin"          Value="2,1"/>
+        </Style>
+
+        <!-- Числовое поле ввода -->
+        <Style x:Key="NumericBox" TargetType="TextBox">
+            <Setter Property="Width"                 Value="70"/>
+            <Setter Property="HorizontalAlignment"   Value="Left"/>
+            <Setter Property="Margin"                Value="4,2"/>
+            <Setter Property="Padding"               Value="4,2"/>
         </Style>
     </Window.Resources>
 
@@ -131,76 +155,113 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- ════ Заголовок и статус-бар ════ -->
+        <!-- ════ Заголовок + статус-бар ════ -->
         <StackPanel Grid.Row="0">
             <DockPanel>
-                <TextBlock Text="Генератор планировок" FontSize="20" FontWeight="Bold" Foreground="#1565C0" DockPanel.Dock="Left"/>
-                <TextBlock Text="все операции внутри Revit" FontSize="11" Foreground="#999" VerticalAlignment="Bottom" Margin="8,0,0,2" DockPanel.Dock="Left"/>
+                <TextBlock Text="Генератор планировок" FontSize="20" FontWeight="Bold"
+                           Foreground="#1565C0" DockPanel.Dock="Left"/>
+                <TextBlock Text="AI-генерация квартир и МОПов внутри Revit"
+                           FontSize="11" Foreground="#999" VerticalAlignment="Bottom"
+                           Margin="8,0,0,2" DockPanel.Dock="Left"/>
                 <Button Content="Отмена" Style="{StaticResource SecondaryButton}" DockPanel.Dock="Right"
-                        Command="{Binding CancelCommand}" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}"
+                        Command="{Binding CancelCommand}"
+                        Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}"
                         HorizontalAlignment="Right" Padding="12,4"/>
             </DockPanel>
 
-            <!-- Статус-бар -->
-            <Border Background="{Binding Status, Converter={StaticResource StatusToColor}}" 
+            <Border Background="{Binding Status, Converter={StaticResource StatusToColor}}"
                     CornerRadius="4" Padding="8,4" Margin="0,8,0,0">
                 <TextBlock Text="{Binding StatusMessage}" Foreground="White" FontSize="12"/>
             </Border>
 
-            <!-- Прогресс генерации -->
-            <StackPanel Visibility="{Binding IsGenerating, Converter={StaticResource BoolToVisibility}}" Margin="0,4,0,0">
-                <ProgressBar Value="{Binding GenerationProgress}" Maximum="100" Height="6" Foreground="#2196F3" Background="#E0E0E0"/>
+            <StackPanel Visibility="{Binding IsGenerating, Converter={StaticResource BoolToVisibility}}"
+                        Margin="0,4,0,0">
+                <ProgressBar Value="{Binding GenerationProgress}" Maximum="100"
+                             Height="6" Foreground="#2196F3" Background="#E0E0E0"/>
                 <TextBlock Text="{Binding GenerationElapsed}" Foreground="#888" FontSize="11" Margin="0,2,0,0"/>
             </StackPanel>
         </StackPanel>
 
-        <!-- ════ Основной контент: вкладки единого рабочего процесса ════ -->
+        <!-- ════ Вкладки основного рабочего процесса ════ -->
         <TabControl Grid.Row="1" Margin="0,10,0,0">
 
-            <!-- ═══ 1. Подключение ═══ -->
+            <!-- ═══════════════════════════════════
+                 1. Подключение / API
+            ════════════════════════════════════ -->
             <TabItem Header="  1. Подключение  ">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
                     <StackPanel>
                         <Border Style="{StaticResource CardBorder}">
                             <StackPanel>
                                 <TextBlock Style="{StaticResource SectionHeader}" Text="Настройки API"/>
+
                                 <Grid>
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="140"/>
+                                        <ColumnDefinition Width="150"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
                                     <Grid.RowDefinitions>
                                         <RowDefinition/><RowDefinition/><RowDefinition/>
-                                        <RowDefinition/><RowDefinition/>
+                                        <RowDefinition/><RowDefinition/><RowDefinition/>
                                     </Grid.RowDefinitions>
 
-                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Base URL:" VerticalAlignment="Center" Margin="0,4"/>
-                                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Settings.BaseUrl, UpdateSourceTrigger=PropertyChanged}" Margin="4"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Base URL:"
+                                               VerticalAlignment="Center" Margin="0,4"/>
+                                    <TextBox   Grid.Row="0" Grid.Column="1"
+                                               Text="{Binding Settings.BaseUrl, UpdateSourceTrigger=PropertyChanged}"
+                                               Margin="4"/>
 
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Окружение:" VerticalAlignment="Center" Margin="0,4"/>
-                                    <ComboBox Grid.Row="1" Grid.Column="1" SelectedItem="{Binding Settings.Environment}" ItemsSource="{Binding Source={StaticResource ApiEnvironmentValues}}" Margin="4"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Окружение:"
+                                               VerticalAlignment="Center" Margin="0,4"/>
+                                    <ComboBox  Grid.Row="1" Grid.Column="1"
+                                               SelectedItem="{Binding Settings.Environment}"
+                                               ItemsSource="{Binding Source={StaticResource ApiEnvironmentValues}}"
+                                               Margin="4"/>
 
-                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="API Key:" VerticalAlignment="Center" Margin="0,4"/>
-                                    <PasswordBox Grid.Row="2" Grid.Column="1" Margin="4"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="API Key:"
+                                               VerticalAlignment="Center" Margin="0,4"/>
+                                    <!-- PasswordBox: обновление через code-behind (PasswordChanged) -->
+                                    <PasswordBox x:Name="ApiKeyBox" Grid.Row="2" Grid.Column="1"
+                                                 Margin="4" PasswordChanged="ApiKeyBox_PasswordChanged"/>
 
-                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Bearer Token:" VerticalAlignment="Center" Margin="0,4"/>
-                                    <PasswordBox Grid.Row="3" Grid.Column="1" Margin="4"/>
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Bearer Token:"
+                                               VerticalAlignment="Center" Margin="0,4"/>
+                                    <PasswordBox x:Name="BearerTokenBox" Grid.Row="3" Grid.Column="1"
+                                                 Margin="4" PasswordChanged="BearerTokenBox_PasswordChanged"/>
 
-                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Таймаут (сек):" VerticalAlignment="Center" Margin="0,4"/>
-                                    <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding Settings.RequestTimeoutSeconds}" Margin="4" Width="80" HorizontalAlignment="Left"/>
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Таймаут (сек):"
+                                               VerticalAlignment="Center" Margin="0,4"/>
+                                    <TextBox   Grid.Row="4" Grid.Column="1"
+                                               Text="{Binding Settings.RequestTimeoutSeconds}"
+                                               Style="{StaticResource NumericBox}" Margin="4,2"/>
+
+                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Режим Mock API:"
+                                               VerticalAlignment="Center" Margin="0,4"
+                                               ToolTip="Работа без реального сервера — для разработки и тестирования"/>
+                                    <CheckBox  Grid.Row="5" Grid.Column="1"
+                                               IsChecked="{Binding Settings.UseMockApi}"
+                                               Content="Использовать Mock-клиент (без реального API)"
+                                               VerticalAlignment="Center" Margin="4"/>
                                 </Grid>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                                    <Button Content="Сохранить" Style="{StaticResource ActionButton}" Command="{Binding SaveSettingsCommand}"/>
-                                    <Button Content="Проверить соединение" Style="{StaticResource SecondaryButton}" Command="{Binding TestConnectionCommand}"/>
+                                    <Button Content="Сохранить настройки" Style="{StaticResource ActionButton}"
+                                            Command="{Binding SaveSettingsCommand}"/>
+                                    <Button Content="Проверить соединение" Style="{StaticResource SecondaryButton}"
+                                            Command="{Binding TestConnectionCommand}"/>
                                 </StackPanel>
+
+                                <TextBlock Foreground="#888" FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap"
+                                           Text="Секреты (API Key, Token) хранятся в зашифрованном виде (DPAPI). Включите Mock API для работы без реального сервера."/>
                             </StackPanel>
                         </Border>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <!-- ═══ 2. Контуры ═══ -->
+            <!-- ═══════════════════════════════════
+                 2. Контур
+            ════════════════════════════════════ -->
             <TabItem Header="  2. Контур  ">
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
@@ -210,76 +271,87 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <Button Grid.Row="0" Content="Загрузить список контуров" Style="{StaticResource ActionButton}" HorizontalAlignment="Left"
+                    <Button Grid.Row="0" Content="Загрузить список контуров из API"
+                            Style="{StaticResource ActionButton}" HorizontalAlignment="Left"
                             Command="{Binding LoadContoursCommand}"/>
 
-                    <ListBox Grid.Row="1" Margin="0,8" ItemsSource="{Binding AvailableContours}" SelectedItem="{Binding SelectedContourSummary}">
+                    <ListBox Grid.Row="1" Margin="0,8"
+                             ItemsSource="{Binding AvailableContours}"
+                             SelectedItem="{Binding SelectedContourSummary}">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <StackPanel Margin="4,2">
                                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
                                     <TextBlock Foreground="#888" FontSize="11">
                                         <Run Text="{Binding Area, StringFormat='{}{0:F0} м²', Mode=OneWay}"/>
-                                        <Run Text=" — "/><Run Text="{Binding Description, Mode=OneWay}"/>
+                                        <Run Text=" — "/>
+                                        <Run Text="{Binding Description, Mode=OneWay}"/>
                                     </TextBlock>
                                 </StackPanel>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
 
-                    <Button Grid.Row="2" Content="Загрузить и отобразить в Revit" Style="{StaticResource SuccessButton}" HorizontalAlignment="Left"
+                    <Button Grid.Row="2" Content="Загрузить выбранный контур и отобразить в Revit"
+                            Style="{StaticResource SuccessButton}" HorizontalAlignment="Left"
                             Command="{Binding LoadSelectedContourCommand}"/>
 
                     <Border Grid.Row="3" Style="{StaticResource CardBorder}" Margin="0,8,0,0"
                             Visibility="{Binding HasContour, Converter={StaticResource BoolToVisibility}}">
                         <StackPanel>
                             <TextBlock Text="{Binding ContourInfo}" FontWeight="SemiBold"/>
-                            <TextBlock Text="{Binding ContourGeometryInfo}" Foreground="#1565C0" FontSize="12" Margin="0,2,0,0"/>
-                            <TextBlock Text="{Binding GenerationHistoryInfo}" Foreground="#888" FontSize="11" Margin="0,2,0,0"/>
-                            <TextBlock Text="{Binding ValidationMessages}" Foreground="OrangeRed" TextWrapping="Wrap" Margin="0,4,0,0"
+                            <TextBlock Text="{Binding ContourGeometryInfo}" Foreground="#1565C0"
+                                       FontSize="12" Margin="0,2,0,0"/>
+                            <TextBlock Text="{Binding GenerationHistoryInfo}" Foreground="#888"
+                                       FontSize="11" Margin="0,2,0,0"/>
+                            <TextBlock Text="{Binding ValidationMessages}" Foreground="OrangeRed"
+                                       TextWrapping="Wrap" Margin="0,4,0,0"
                                        Visibility="{Binding ValidationResult, Converter={StaticResource NullToVisibility}}"/>
                         </StackPanel>
                     </Border>
                 </Grid>
             </TabItem>
 
-            <!-- ═══ 3. Генерация ═══ -->
+            <!-- ═══════════════════════════════════
+                 3. Параметры генерации
+            ════════════════════════════════════ -->
             <TabItem Header="  3. Генерация  ">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
                     <StackPanel>
+
+                        <!-- Общие параметры -->
                         <Border Style="{StaticResource CardBorder}">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource SectionHeader}" Text="Параметры пакетной генерации"/>
-                                <TextBlock Text="Все варианты генерируются за один запрос и доступны сразу для сравнения." Foreground="#888" FontSize="11" Margin="0,0,0,8"/>
+                                <TextBlock Style="{StaticResource SectionHeader}" Text="Общие параметры генерации"/>
+                                <TextBlock Foreground="#888" FontSize="11" Margin="0,0,0,8"
+                                           Text="Все варианты генерируются за один запрос к AI-сервису."/>
 
                                 <Grid>
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="220"/>
+                                        <ColumnDefinition Width="230"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
                                     <Grid.RowDefinitions>
                                         <RowDefinition/><RowDefinition/><RowDefinition/>
-                                        <RowDefinition/><RowDefinition/>
                                     </Grid.RowDefinitions>
 
                                     <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center">
-                                        <Run Text="Количество вариантов: "/><Run Text="{Binding GenerationParams.VariantCount, Mode=OneWay}" FontWeight="Bold"/>
+                                        <Run Text="Количество вариантов: "/>
+                                        <Run Text="{Binding GenerationParams.VariantCount, Mode=OneWay}"
+                                             FontWeight="Bold"/>
                                     </TextBlock>
-                                    <Slider Grid.Row="0" Grid.Column="1" Minimum="1" Maximum="20" Value="{Binding GenerationParams.VariantCount}"
-                                            IsSnapToTickEnabled="True" TickFrequency="1" TickPlacement="BottomRight" Margin="4,8"/>
+                                    <Slider Grid.Row="0" Grid.Column="1"
+                                            Minimum="1" Maximum="20"
+                                            Value="{Binding GenerationParams.VariantCount}"
+                                            IsSnapToTickEnabled="True" TickFrequency="1"
+                                            TickPlacement="BottomRight" Margin="4,8"/>
 
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Мин. площадь помещения (м²):" VerticalAlignment="Center"/>
-                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding GenerationParams.MinRoomArea}" Margin="4" Width="80" HorizontalAlignment="Left"/>
-
-                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Макс. площадь помещения (м²):" VerticalAlignment="Center"/>
-                                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding GenerationParams.MaxRoomArea}" Margin="4" Width="80" HorizontalAlignment="Left"/>
-
-                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Мин. ширина коридора (м):" VerticalAlignment="Center"/>
-                                    <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding GenerationParams.MinCorridorWidth}" Margin="4" Width="80" HorizontalAlignment="Left"/>
-
-                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Приоритет оптимизации:" VerticalAlignment="Center"/>
-                                    <ComboBox Grid.Row="4" Grid.Column="1" Margin="4" Width="160" HorizontalAlignment="Left"
-                                              SelectedValue="{Binding GenerationParams.OptimizationPriority}" SelectedValuePath="Content">
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Приоритет оптимизации:"
+                                               VerticalAlignment="Center"/>
+                                    <ComboBox Grid.Row="1" Grid.Column="1" Margin="4"
+                                              Width="160" HorizontalAlignment="Left"
+                                              SelectedValue="{Binding GenerationParams.OptimizationPriority}"
+                                              SelectedValuePath="Content">
                                         <ComboBoxItem Content="efficiency"/>
                                         <ComboBoxItem Content="area"/>
                                         <ComboBoxItem Content="rooms"/>
@@ -288,15 +360,135 @@
                             </StackPanel>
                         </Border>
 
-                        <Button Content="Сгенерировать варианты" Style="{StaticResource SuccessButton}" HorizontalAlignment="Left" Margin="0,8"
-                                Command="{Binding GenerateCommand}" FontSize="14" Padding="24,10"/>
+                        <!-- Состав квартир -->
+                        <Border Style="{StaticResource CardBorder}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource SectionHeader}"
+                                           Text="Состав квартир (квартирография)"/>
+                                <TextBlock Foreground="#888" FontSize="11" Margin="0,0,0,8"
+                                           Text="Укажите требуемое количество квартир каждого типа. 0 — тип не требуется."/>
 
-                        <TextBlock Text="{Binding GenerationHistoryInfo}" Foreground="#888" FontSize="11" Margin="4,4,0,0"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="180"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition/><RowDefinition/><RowDefinition/>
+                                        <RowDefinition/><RowDefinition/>
+                                        <RowDefinition Height="8"/>
+                                        <RowDefinition/><RowDefinition/>
+                                    </Grid.RowDefinitions>
+
+                                    <!-- Типы квартир -->
+                                    <TextBlock Grid.Row="0" Grid.Column="0"
+                                               Text="Студии:" VerticalAlignment="Center" Margin="0,3"/>
+                                    <TextBox   Grid.Row="0" Grid.Column="1"
+                                               Text="{Binding GenerationParams.StudioCount, UpdateSourceTrigger=PropertyChanged}"
+                                               Style="{StaticResource NumericBox}"/>
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0"
+                                               Text="1-комнатные:" VerticalAlignment="Center" Margin="0,3"/>
+                                    <TextBox   Grid.Row="1" Grid.Column="1"
+                                               Text="{Binding GenerationParams.OneRoomCount, UpdateSourceTrigger=PropertyChanged}"
+                                               Style="{StaticResource NumericBox}"/>
+
+                                    <TextBlock Grid.Row="2" Grid.Column="0"
+                                               Text="2-комнатные:" VerticalAlignment="Center" Margin="0,3"/>
+                                    <TextBox   Grid.Row="2" Grid.Column="1"
+                                               Text="{Binding GenerationParams.TwoRoomCount, UpdateSourceTrigger=PropertyChanged}"
+                                               Style="{StaticResource NumericBox}"/>
+
+                                    <TextBlock Grid.Row="3" Grid.Column="0"
+                                               Text="3-комнатные:" VerticalAlignment="Center" Margin="0,3"/>
+                                    <TextBox   Grid.Row="3" Grid.Column="1"
+                                               Text="{Binding GenerationParams.ThreeRoomCount, UpdateSourceTrigger=PropertyChanged}"
+                                               Style="{StaticResource NumericBox}"/>
+
+                                    <TextBlock Grid.Row="4" Grid.Column="0"
+                                               Text="4-комнатные:" VerticalAlignment="Center" Margin="0,3"/>
+                                    <TextBox   Grid.Row="4" Grid.Column="1"
+                                               Text="{Binding GenerationParams.FourRoomCount, UpdateSourceTrigger=PropertyChanged}"
+                                               Style="{StaticResource NumericBox}"/>
+
+                                    <!-- Разделитель -->
+                                    <Separator Grid.Row="5" Grid.ColumnSpan="3" Margin="0,4"/>
+
+                                    <!-- Площади квартир -->
+                                    <TextBlock Grid.Row="6" Grid.Column="0"
+                                               Text="Мин. площадь квартиры (м²):" VerticalAlignment="Center" Margin="0,3"/>
+                                    <TextBox   Grid.Row="6" Grid.Column="1"
+                                               Text="{Binding GenerationParams.MinApartmentArea, UpdateSourceTrigger=PropertyChanged}"
+                                               Style="{StaticResource NumericBox}"/>
+
+                                    <TextBlock Grid.Row="7" Grid.Column="0"
+                                               Text="Макс. площадь квартиры (м²):" VerticalAlignment="Center" Margin="0,3"/>
+                                    <TextBox   Grid.Row="7" Grid.Column="1"
+                                               Text="{Binding GenerationParams.MaxApartmentArea, UpdateSourceTrigger=PropertyChanged}"
+                                               Style="{StaticResource NumericBox}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Параметры МОП -->
+                        <Border Style="{StaticResource CardBorder}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource SectionHeader}"
+                                           Text="Требования к МОПам (местам общего пользования)"/>
+                                <TextBlock Foreground="#888" FontSize="11" Margin="0,0,0,8"
+                                           Text="МОП: лифтовые холлы, общие коридоры, помещения общего назначения."/>
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="230"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition/><RowDefinition/>
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="0"
+                                               Text="Целевая площадь МОП (м², 0=авто):"
+                                               VerticalAlignment="Center" Margin="0,3"/>
+                                    <TextBox   Grid.Row="0" Grid.Column="1"
+                                               Text="{Binding GenerationParams.MopAreaTarget, UpdateSourceTrigger=PropertyChanged}"
+                                               Style="{StaticResource NumericBox}"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="2"
+                                               Text="  0 = AI определяет автоматически"
+                                               Foreground="#AAA" FontSize="11" VerticalAlignment="Center"/>
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0"
+                                               Text="Мин. ширина коридора МОП (м):"
+                                               VerticalAlignment="Center" Margin="0,3"/>
+                                    <TextBox   Grid.Row="1" Grid.Column="1"
+                                               Text="{Binding GenerationParams.MinCorridorWidth, UpdateSourceTrigger=PropertyChanged}"
+                                               Style="{StaticResource NumericBox}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Кнопка генерации -->
+                        <StackPanel Margin="0,8,0,4">
+                            <Button Content="▶  Сгенерировать варианты планировок"
+                                    Style="{StaticResource SuccessButton}"
+                                    HorizontalAlignment="Left"
+                                    Command="{Binding GenerateCommand}"
+                                    FontSize="14" Padding="24,10"/>
+                            <TextBlock Foreground="#888" FontSize="11" Margin="4,6,0,0"
+                                       Text="При повторном запуске новые варианты заменяют предыдущие."/>
+                            <TextBlock Text="{Binding GenerationHistoryInfo}"
+                                       Foreground="#1565C0" FontSize="11" Margin="4,2,0,0"/>
+                        </StackPanel>
+
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <!-- ═══ 4. Каталог результатов ═══ -->
+            <!-- ═══════════════════════════════════
+                 4. Результаты / Галерея вариантов
+            ════════════════════════════════════ -->
             <TabItem Header="  4. Результаты  ">
                 <Grid Margin="8">
                     <Grid.RowDefinitions>
@@ -305,62 +497,102 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Панель навигации: ← счётчик → и переключатель истории -->
+                    <!-- Панель навигации по вариантам -->
                     <DockPanel Grid.Row="0" Margin="0,0,0,8">
                         <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
-                            <Button Content="◀" Style="{StaticResource NavArrowButton}" Command="{Binding PreviousVariantCommand}" ToolTip="Предыдущий (←)"/>
-                            <TextBlock Text="{Binding VariantNavigationInfo}" FontSize="16" FontWeight="Bold" Foreground="#333"
+                            <Button Content="◀" Style="{StaticResource NavArrowButton}"
+                                    Command="{Binding PreviousVariantCommand}" ToolTip="Предыдущий (←)"/>
+                            <TextBlock Text="{Binding VariantNavigationInfo}"
+                                       FontSize="16" FontWeight="Bold" Foreground="#333"
                                        VerticalAlignment="Center" Margin="12,0"/>
-                            <Button Content="▶" Style="{StaticResource NavArrowButton}" Command="{Binding NextVariantCommand}" ToolTip="Следующий (→)"/>
+                            <Button Content="▶" Style="{StaticResource NavArrowButton}"
+                                    Command="{Binding NextVariantCommand}" ToolTip="Следующий (→)"/>
                         </StackPanel>
 
-                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center">
-                            <CheckBox Content="Показать все из истории" IsChecked="{Binding ShowAllHistory}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <TextBlock Text="← → для навигации" Foreground="#AAA" FontSize="10" VerticalAlignment="Center"/>
+                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Right"
+                                    HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <CheckBox Content="Показать историю генераций"
+                                      IsChecked="{Binding ShowAllHistory}"
+                                      VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="← → для навигации"
+                                       Foreground="#AAA" FontSize="10" VerticalAlignment="Center"/>
                         </StackPanel>
                     </DockPanel>
 
-                    <!-- Основная область: каталог + детали -->
+                    <!-- Каталог слева + Детали справа -->
                     <Grid Grid.Row="1">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="280"/>
+                            <ColumnDefinition Width="290"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
 
-                        <!-- Каталог вариантов (карточки с миниатюрами и метриками) -->
+                        <!-- ── Каталог вариантов ── -->
                         <Border Grid.Column="0" Style="{StaticResource CardBorder}" Margin="0,0,8,0">
                             <DockPanel>
-                                <TextBlock DockPanel.Dock="Top" Style="{StaticResource SectionHeader}" Text="Каталог вариантов"/>
-                                <ListBox ItemsSource="{Binding DisplayedVariants}" SelectedItem="{Binding SelectedVariant}"
-                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" BorderThickness="0">
+                                <TextBlock DockPanel.Dock="Top"
+                                           Style="{StaticResource SectionHeader}"
+                                           Text="Каталог вариантов"/>
+                                <ListBox ItemsSource="{Binding DisplayedVariants}"
+                                         SelectedItem="{Binding SelectedVariant}"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                         BorderThickness="0">
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
                                             <Border Style="{StaticResource VariantCard}">
                                                 <StackPanel>
-                                                    <!-- Заголовок карточки -->
+                                                    <!-- Заголовок: номер + Score -->
                                                     <DockPanel>
-                                                        <TextBlock FontWeight="Bold" FontSize="13" DockPanel.Dock="Left">
-                                                            <Run Text="# "/><Run Text="{Binding VariantIndex, Mode=OneWay}"/>
+                                                        <TextBlock FontWeight="Bold" FontSize="13"
+                                                                   DockPanel.Dock="Left">
+                                                            <Run Text="# "/>
+                                                            <Run Text="{Binding VariantIndex, Mode=OneWay}"/>
                                                         </TextBlock>
-                                                        <!-- Score badge -->
-                                                        <Border DockPanel.Dock="Right" Background="#1565C0" CornerRadius="10" Padding="8,2" HorizontalAlignment="Right">
-                                                            <TextBlock Foreground="White" FontSize="11" FontWeight="Bold">
+                                                        <Border DockPanel.Dock="Right" Background="#1565C0"
+                                                                CornerRadius="10" Padding="7,2"
+                                                                HorizontalAlignment="Right">
+                                                            <TextBlock Foreground="White" FontSize="11"
+                                                                       FontWeight="Bold">
                                                                 <Run Text="{Binding EfficiencyScore, StringFormat='{}{0:F0}', Mode=OneWay}"/>
                                                             </TextBlock>
                                                         </Border>
                                                     </DockPanel>
 
-                                                    <!-- Каталожная строка метрик -->
-                                                    <TextBlock Text="{Binding CatalogSummary, Mode=OneWay}" Foreground="#666" FontSize="11" Margin="0,4,0,0"/>
+                                                    <!-- Метрика: квартиры + МОП -->
+                                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0"
+                                                                FlowDirection="LeftToRight">
+                                                        <!-- Чип: количество квартир -->
+                                                        <Border CornerRadius="10" Padding="6,2" Margin="0,0,4,0"
+                                                                Background="#E3F2FD">
+                                                            <TextBlock FontSize="11" Foreground="#1565C0">
+                                                                <Run Text="{Binding ApartmentCount, Mode=OneWay}"/>
+                                                                <Run Text=" кв."/>
+                                                            </TextBlock>
+                                                        </Border>
+                                                        <!-- Чип: МОП -->
+                                                        <Border CornerRadius="10" Padding="6,2" Margin="0,0,4,0"
+                                                                Background="#E8F5E9">
+                                                            <TextBlock FontSize="11" Foreground="#388E3C">
+                                                                <Run Text="МОП "/>
+                                                                <Run Text="{Binding MopArea, StringFormat='{}{0:F0}', Mode=OneWay}"/>
+                                                                <Run Text="м²"/>
+                                                            </TextBlock>
+                                                        </Border>
+                                                    </StackPanel>
 
-                                                    <!-- Коэффициент полезной площади — визуальный бар -->
-                                                    <Grid Margin="0,4,0,0" Height="6">
+                                                    <!-- Короткие метрики -->
+                                                    <TextBlock Text="{Binding CatalogSummary, Mode=OneWay}"
+                                                               Foreground="#666" FontSize="11" Margin="0,3,0,0"/>
+
+                                                    <!-- Полоса эффективности (UsableRatio) -->
+                                                    <Grid Margin="0,4,0,0" Height="5">
                                                         <Border Background="#E8E8E8" CornerRadius="3"/>
-                                                        <Border Background="#4CAF50" CornerRadius="3" HorizontalAlignment="Left">
+                                                        <Border Background="#4CAF50" CornerRadius="3"
+                                                                HorizontalAlignment="Left">
                                                             <Border.Width>
                                                                 <MultiBinding Converter="{x:Static converters:RatioToWidthConverter.Instance}">
                                                                     <Binding Path="UsableRatio" Mode="OneWay"/>
-                                                                    <Binding RelativeSource="{RelativeSource AncestorType=Grid}" Path="ActualWidth"/>
+                                                                    <Binding RelativeSource="{RelativeSource AncestorType=Grid}"
+                                                                             Path="ActualWidth"/>
                                                                 </MultiBinding>
                                                             </Border.Width>
                                                         </Border>
@@ -373,46 +605,106 @@
                             </DockPanel>
                         </Border>
 
-                        <!-- Детали выбранного варианта -->
+                        <!-- ── Детали выбранного варианта ── -->
                         <Border Grid.Column="1" Style="{StaticResource CardBorder}">
                             <DockPanel>
-                                <TextBlock DockPanel.Dock="Top" Style="{StaticResource SectionHeader}" Text="Детали варианта"/>
-                                <TextBlock DockPanel.Dock="Top" Text="{Binding VariantInfo}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,8"/>
+                                <TextBlock DockPanel.Dock="Top"
+                                           Style="{StaticResource SectionHeader}"
+                                           Text="Детали выбранного варианта"/>
+
+                                <!-- Метрики: основные -->
+                                <Border DockPanel.Dock="Top" Background="#F8F9FA"
+                                        CornerRadius="4" Padding="8" Margin="0,0,0,8">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding VariantInfo}"
+                                                   TextWrapping="Wrap" FontSize="12"/>
+
+                                        <!-- Распределение квартир по типам -->
+                                        <TextBlock Margin="0,6,0,0" FontSize="12" FontWeight="SemiBold"
+                                                   Text="Состав квартир:"
+                                                   Visibility="{Binding HasApartmentTypeInfo, Converter={StaticResource BoolToVisibility}}"/>
+                                        <TextBlock Text="{Binding VariantApartmentTypeSummary}"
+                                                   FontSize="12" Foreground="#1565C0" Margin="0,2,0,0"
+                                                   Visibility="{Binding HasApartmentTypeInfo, Converter={StaticResource BoolToVisibility}}"/>
+                                    </StackPanel>
+                                </Border>
 
                                 <!-- Кнопки применения -->
-                                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,12,0,0">
-                                    <Button Content="Применить (разделители)" Style="{StaticResource SuccessButton}" Command="{Binding ApplyVariantCommand}"/>
-                                    <Button Content="Применить со стенами" Style="{StaticResource ActionButton}" Command="{Binding ApplyWithWallsCommand}"/>
+                                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,10,0,0">
+                                    <Button Content="Применить (разделители + помещения)"
+                                            Style="{StaticResource SuccessButton}"
+                                            Command="{Binding ApplyVariantCommand}"/>
+                                    <Button Content="Применить со стенами"
+                                            Style="{StaticResource ActionButton}"
+                                            Command="{Binding ApplyWithWallsCommand}"/>
                                 </StackPanel>
 
-                                <!-- Таблица помещений -->
-                                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                    <ItemsControl ItemsSource="{Binding SelectedVariant.Rooms}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Border BorderBrush="#E8E8E8" BorderThickness="0,0,0,1" Padding="4,6">
-                                                    <Grid>
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="*"/>
-                                                            <ColumnDefinition Width="100"/>
-                                                            <ColumnDefinition Width="80"/>
-                                                        </Grid.ColumnDefinitions>
-                                                        <TextBlock Grid.Column="0" Text="{Binding Name}" FontWeight="SemiBold" FontSize="12"/>
-                                                        <TextBlock Grid.Column="1" Text="{Binding Type}" Foreground="#888" FontSize="11"/>
-                                                        <TextBlock Grid.Column="2" Foreground="#444" FontSize="12" HorizontalAlignment="Right">
-                                                            <Run Text="{Binding Area, StringFormat='{}{0:F1}', Mode=OneWay}"/><Run Text=" м²"/>
-                                                        </TextBlock>
-                                                    </Grid>
-                                                </Border>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </ScrollViewer>
+                                <!-- Список помещений -->
+                                <Border DockPanel.Dock="Top" Margin="0,4,0,0">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource SubHeader}" Text="Помещения варианта:"/>
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="340">
+                                            <ItemsControl ItemsSource="{Binding SelectedVariant.Rooms}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border BorderBrush="#F0F0F0"
+                                                                BorderThickness="0,0,0,1"
+                                                                Padding="4,5">
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                    <ColumnDefinition Width="110"/>
+                                                                    <ColumnDefinition Width="72"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Grid.Column="0"
+                                                                           Text="{Binding Name}"
+                                                                           FontWeight="SemiBold"
+                                                                           FontSize="12"/>
+                                                                <!-- Тип помещения: МОП выделен цветом -->
+                                                                <TextBlock Grid.Column="1"
+                                                                           FontSize="11"
+                                                                           Margin="4,0">
+                                                                    <TextBlock.Style>
+                                                                        <Style TargetType="TextBlock">
+                                                                            <Setter Property="Foreground" Value="#888"/>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding Type}" Value="CommonArea">
+                                                                                    <Setter Property="Foreground" Value="#388E3C"/>
+                                                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                                                </DataTrigger>
+                                                                                <DataTrigger Binding="{Binding Type}" Value="Lobby">
+                                                                                    <Setter Property="Foreground" Value="#388E3C"/>
+                                                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                                                </DataTrigger>
+                                                                                <DataTrigger Binding="{Binding Type}" Value="Elevator">
+                                                                                    <Setter Property="Foreground" Value="#388E3C"/>
+                                                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </TextBlock.Style>
+                                                                    <Run Text="{Binding Type, Mode=OneWay}"/>
+                                                                </TextBlock>
+                                                                <TextBlock Grid.Column="2"
+                                                                           Foreground="#444" FontSize="12"
+                                                                           HorizontalAlignment="Right">
+                                                                    <Run Text="{Binding Area, StringFormat='{}{0:F1}', Mode=OneWay}"/>
+                                                                    <Run Text=" м²"/>
+                                                                </TextBlock>
+                                                            </Grid>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </StackPanel>
+                                </Border>
                             </DockPanel>
                         </Border>
                     </Grid>
                 </Grid>
             </TabItem>
+
         </TabControl>
     </Grid>
 </Window>

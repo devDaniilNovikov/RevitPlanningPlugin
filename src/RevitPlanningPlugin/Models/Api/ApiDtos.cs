@@ -57,10 +57,31 @@ namespace RevitPlanningPlugin.Models.Api
     {
         [JsonProperty("contour_id")] public string ContourId { get; set; } = string.Empty;
         [JsonProperty("variant_count")] public int VariantCount { get; set; } = 3;
+
+        // ——— Параметры квартир ———
+
+        /// <summary>Состав квартир: тип → требуемое количество.</summary>
+        [JsonProperty("apartment_types")] public Dictionary<string, int>? ApartmentTypes { get; set; }
+
+        /// <summary>Минимальная площадь квартиры, м².</summary>
+        [JsonProperty("min_apartment_area")] public double? MinApartmentArea { get; set; }
+
+        /// <summary>Максимальная площадь квартиры, м².</summary>
+        [JsonProperty("max_apartment_area")] public double? MaxApartmentArea { get; set; }
+
+        // ——— Параметры МОП ———
+
+        /// <summary>Целевая площадь МОПов, м². 0 = автоопределение.</summary>
+        [JsonProperty("mop_area_target")] public double? MopAreaTarget { get; set; }
+
+        /// <summary>Минимальная ширина коридора МОП, м.</summary>
+        [JsonProperty("min_corridor_width")] public double? MinCorridorWidth { get; set; }
+
+        // ——— Общие параметры ———
+
         [JsonProperty("room_types")] public List<string>? RoomTypes { get; set; }
         [JsonProperty("min_room_area")] public double? MinRoomArea { get; set; }
         [JsonProperty("max_room_area")] public double? MaxRoomArea { get; set; }
-        [JsonProperty("min_corridor_width")] public double? MinCorridorWidth { get; set; }
         [JsonProperty("optimization_priority")] public string? OptimizationPriority { get; set; }
         [JsonProperty("custom_parameters")] public Dictionary<string, string>? CustomParameters { get; set; }
     }
@@ -83,11 +104,29 @@ namespace RevitPlanningPlugin.Models.Api
         [JsonProperty("variant_index")] public int VariantIndex { get; set; }
         [JsonProperty("rooms")] public List<ApiRoomDto> Rooms { get; set; } = new();
         [JsonProperty("partitions")] public List<ApiSegmentDto>? Partitions { get; set; }
+
+        // ——— Метрики площадей ———
         [JsonProperty("total_area")] public double TotalArea { get; set; }
         [JsonProperty("usable_area")] public double UsableArea { get; set; }
-        [JsonProperty("room_count")] public int RoomCount { get; set; }
+
+        /// <summary>Суммарная площадь МОПов (лифтовые холлы, общие коридоры), м².</summary>
+        [JsonProperty("mop_area")] public double MopArea { get; set; }
+
         [JsonProperty("corridor_area")] public double CorridorArea { get; set; }
+
+        // ——— Метрики квартир ———
+        [JsonProperty("room_count")] public int RoomCount { get; set; }
+
+        /// <summary>Количество квартирных единиц в варианте.</summary>
+        [JsonProperty("apartment_count")] public int ApartmentCount { get; set; }
+
+        /// <summary>Распределение квартир по типам: тип → количество.</summary>
+        [JsonProperty("apartment_type_distribution")]
+        public Dictionary<string, int>? ApartmentTypeDistribution { get; set; }
+
+        // ——— Интегральная оценка ———
         [JsonProperty("efficiency_score")] public double EfficiencyScore { get; set; }
+
         [JsonProperty("custom_metrics")] public Dictionary<string, double>? CustomMetrics { get; set; }
         [JsonProperty("metadata")] public Dictionary<string, string>? Metadata { get; set; }
     }

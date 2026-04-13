@@ -19,6 +19,8 @@ namespace RevitPlanningPlugin.Models.Enums
         Staircase,
         Elevator,
         Balcony,
+        /// <summary>МОП — место общего пользования (лифтовый холл, общий коридор, прочие помещения общего назначения).</summary>
+        CommonArea,
         Other
     }
 }

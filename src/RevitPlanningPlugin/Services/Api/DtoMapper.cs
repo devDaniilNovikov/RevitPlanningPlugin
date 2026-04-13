@@ -41,8 +41,12 @@ namespace RevitPlanningPlugin.Services.Api
                 VariantIndex = dto.VariantIndex,
                 TotalArea = dto.TotalArea,
                 UsableArea = dto.UsableArea,
-                RoomCount = dto.RoomCount,
+                MopArea = dto.MopArea,
                 CorridorArea = dto.CorridorArea,
+                RoomCount = dto.RoomCount,
+                ApartmentCount = dto.ApartmentCount,
+                ApartmentTypeDistribution = dto.ApartmentTypeDistribution
+                    ?? new Dictionary<string, int>(),
                 EfficiencyScore = dto.EfficiencyScore,
                 Rooms = dto.Rooms?.Select(MapRoom).ToList() ?? new List<RoomLayout>(),
                 Partitions = dto.Partitions?.Select(MapSegment).ToList() ?? new List<ContourSegment>(),
@@ -55,17 +59,39 @@ namespace RevitPlanningPlugin.Services.Api
 
         public static ApiGenerationRequestDto ToDto(string contourId, GenerationParameters parameters)
         {
-            return new ApiGenerationRequestDto
+            var dto = new ApiGenerationRequestDto
             {
                 ContourId = contourId,
                 VariantCount = parameters.VariantCount,
+
+                // Квартиры
+                ApartmentTypes = parameters.GetApartmentTypeRequirements(),
+                MinApartmentArea = parameters.MinApartmentArea > 0
+                    ? parameters.MinApartmentArea : (double?)null,
+                MaxApartmentArea = parameters.MaxApartmentArea > 0
+                    ? parameters.MaxApartmentArea : (double?)null,
+
+                // МОП
+                MopAreaTarget = parameters.MopAreaTarget > 0
+                    ? parameters.MopAreaTarget : (double?)null,
+                MinCorridorWidth = parameters.MinCorridorWidth > 0
+                    ? parameters.MinCorridorWidth : (double?)null,
+
+                // Общие
                 RoomTypes = parameters.RequiredRoomTypes?.Select(r => r.ToString()).ToList(),
-                MinRoomArea = parameters.MinRoomArea,
-                MaxRoomArea = parameters.MaxRoomArea,
-                MinCorridorWidth = parameters.MinCorridorWidth,
+                MinRoomArea = parameters.MinRoomArea > 0
+                    ? parameters.MinRoomArea : (double?)null,
+                MaxRoomArea = parameters.MaxRoomArea > 0
+                    ? parameters.MaxRoomArea : (double?)null,
                 OptimizationPriority = parameters.OptimizationPriority,
                 CustomParameters = parameters.CustomParameters
             };
+
+            // Убираем пустой словарь apartment_types, чтобы не слать {}
+            if (dto.ApartmentTypes?.Count == 0)
+                dto.ApartmentTypes = null;
+
+            return dto;
         }
 
         // ————— Helpers —————
@@ -113,7 +139,26 @@ namespace RevitPlanningPlugin.Services.Api
         private static RoomType ParseRoomType(string? type)
         {
             if (string.IsNullOrWhiteSpace(type)) return RoomType.Other;
-            return Enum.TryParse<RoomType>(type, true, out var result) ? result : RoomType.Other;
+
+            // Явное сопоставление строк API → enum (регистронезависимо)
+            return type.ToLowerInvariant() switch
+            {
+                "commonarea" or "common_area" or "mop" => RoomType.CommonArea,
+                "lobby"                                 => RoomType.Lobby,
+                "elevator"                              => RoomType.Elevator,
+                "corridor"                              => RoomType.Corridor,
+                "staircase"                             => RoomType.Staircase,
+                "livingroom" or "living_room"           => RoomType.LivingRoom,
+                "bedroom"                               => RoomType.Bedroom,
+                "kitchen"                               => RoomType.Kitchen,
+                "bathroom"                              => RoomType.Bathroom,
+                "storage"                               => RoomType.Storage,
+                "office"                                => RoomType.Office,
+                "balcony"                               => RoomType.Balcony,
+                _ => Enum.TryParse<RoomType>(type, true, out var result)
+                        ? result
+                        : RoomType.Other
+            };
         }
     }
 }

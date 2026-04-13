@@ -2,7 +2,55 @@
 
 ## Обзор
 
-Revit-плагин для получения архитектурных контуров из внешнего API, генерации вариантов планировочных решений и применения выбранного варианта в BIM-модель — без выхода из среды Revit.
+Revit-плагин для получения архитектурных контуров здания из внешнего API,
+AI-генерации вариантов размещения **квартир и МОПов** внутри пятна здания
+и применения выбранного варианта в BIM-модель — без выхода из среды Revit.
+
+Версия **2.0** — с поддержкой квартирографии, МОПов (мест общего пользования),
+повторной перегенерации по корректировкам и Mock-режима для разработки.
+
+---
+
+## Что нового в версии 2.0
+
+### МОПы (места общего пользования)
+- Добавлен тип помещения `CommonArea` (МОП) — лифтовые холлы, общие коридоры, помещения общего назначения.
+- В метриках каждого варианта отдельно отображается **суммарная площадь МОПов** (`MopArea`).
+- В параметрах генерации можно задать **целевую площадь МОПов** и **минимальную ширину коридора МОП**.
+- В списке помещений МОП-комнаты выделены зелёным цветом для визуального различия.
+
+### Квартирография (состав квартир)
+- В параметрах генерации задаётся **состав квартир по типам**:
+  студии, 1-комнатные, 2-комнатные, 3-комнатные, 4-комнатные.
+- В метриках варианта отображается **количество квартир** и
+  **распределение по типам** (например: «1К: 4 | 2К: 6 | 3К: 2»).
+- В API-запросе передаётся `apartment_types` (словарь тип → количество),
+  `min_apartment_area`, `max_apartment_area`.
+
+### Mock-режим (режим без реального API)
+- В настройках добавлен флаг **«Использовать Mock-клиент»**.
+- Mock генерирует реалистичные планировки с квартирами и МОПами:
+  центральная полоса МОП (лифтовый холл + коридоры), квартиры по обе стороны.
+- Удобно для разработки и демонстрации без внешнего сервера.
+
+### Привязка PasswordBox
+- Поля **API Key** и **Bearer Token** теперь корректно читают и сохраняют значения
+  через `PasswordChanged` в code-behind (стандартная WPF-практика для безопасного ввода).
+
+### Обновлённые метрики в галерее вариантов
+Для каждого варианта отображаются все метрики, требуемые по ТЗ:
+
+| Метрика                       | Где отображается                     |
+|-------------------------------|--------------------------------------|
+| Общая площадь                 | Детали варианта                      |
+| Полезная площадь              | Детали варианта                      |
+| Количество квартир            | Карточка + Детали варианта           |
+| Распределение по типам квартир| Детали варианта (строка «Состав»)    |
+| Суммарная площадь МОПов       | Карточка (чип) + Детали варианта     |
+| Площадь коридоров             | Детали варианта                      |
+| Коэффициент эффективности     | Карточка (полоса) + Score-бейдж      |
+
+---
 
 ## Архитектура
 
@@ -15,12 +63,13 @@ Revit-плагин для получения архитектурных конт
 │  MainViewModel: load → validate → generate → preview → apply│
 ├─────────────────────────────────────────────────────────────┤
 │  Domain Layer  (модели, правила, валидация)                  │
-│  BuildingContour, LayoutVariant, RoomLayout,                │
-│  GenerationParameters, ValidationResult                     │
+│  BuildingContour, LayoutVariant (+ MopArea, ApartmentCount, │
+│  ApartmentTypeDistribution), GenerationParameters           │
+│  (+ MopAreaTarget, StudioCount, OneRoomCount, ...)          │
 ├─────────────────────────────────────────────────────────────┤
 │  Infrastructure Layer                                        │
-│  PlanningApiClient, DtoMapper, ConfigurationService,        │
-│  ContourValidator, UnitConverter, PluginLogger              │
+│  PlanningApiClient, MockPlanningApiClient, DtoMapper,       │
+│  ConfigurationService (+ UseMockApi), PluginLogger          │
 ├─────────────────────────────────────────────────────────────┤
 │  Revit Adapter Layer                                         │
 │  RevitCurveBuilder, RevitElementCreator,                    │
@@ -32,128 +81,196 @@ Revit-плагин для получения архитектурных конт
 
 ```
 src/RevitPlanningPlugin/
-├── App.cs                          # IExternalApplication — точка входа
+├── App.cs                              # IExternalApplication — точка входа
 ├── Commands/
 │   └── OpenPlanningGeneratorCommand.cs
 ├── Models/
-│   ├── Api/       ApiDtos.cs       # DTO для REST API
-│   ├── Domain/    BuildingContour, LayoutVariant, RoomLayout, ...
-│   └── Enums/     ApiEnvironment, RoomType, SegmentType, ...
+│   ├── Api/
+│   │   └── ApiDtos.cs                  # DTO для REST API (+ MOP/apartment поля)
+│   ├── Domain/
+│   │   ├── BuildingContour.cs
+│   │   ├── GenerationParameters.cs     # + MopAreaTarget, StudioCount..FourRoomCount
+│   │   ├── LayoutVariant.cs            # + MopArea, ApartmentCount, ApartmentTypeDistribution
+│   │   ├── RoomLayout.cs
+│   │   └── ContourSegment.cs
+│   └── Enums/
+│       ├── RoomType.cs                 # + CommonArea (МОП)
+│       ├── ApiEnvironment.cs
+│       ├── GenerationStatus.cs
+│       ├── SegmentType.cs
+│       └── ValidationSeverity.cs
 ├── Services/
-│   ├── Api/       PlanningApiClient, DtoMapper
-│   ├── Configuration/ ConfigurationService, PluginSettings
-│   ├── Geometry/  ContourValidator, UnitConverter
-│   └── Logging/   PluginLogger
+│   ├── Api/
+│   │   ├── PlanningApiClient.cs        # REST-клиент с retry и авторизацией
+│   │   ├── MockPlanningApiClient.cs    # Mock с квартирами и МОП-зонами
+│   │   └── DtoMapper.cs               # DTO ↔ Domain (+ новые поля)
+│   ├── Configuration/
+│   │   └── ConfigurationService.cs    # + UseMockApi в PluginSettings
+│   ├── Geometry/
+│   │   ├── ContourValidator.cs
+│   │   ├── UnitConverter.cs
+│   │   └── ThumbnailGenerator.cs
+│   └── Logging/
+│       └── PluginLogger.cs
 ├── Revit/
 │   ├── Geometry/  RevitCurveBuilder
 │   ├── Elements/  RevitElementCreator, CreatedElementsTracker
 │   └── Transactions/ SafeTransaction
 ├── UI/
-│   ├── Views/     MainWindow.xaml / .cs
-│   ├── ViewModels/ MainViewModel, SettingsViewModel
-│   └── Converters/ StatusToColorConverter, ...
-├── Infrastructure/ ObservableObject, RelayCommand, EventAggregator
-└── Resources/      Иконки (icon_16.png, icon_32.png)
+│   ├── Views/
+│   │   ├── MainWindow.xaml             # + вкладки МОП, квартирография
+│   │   └── MainWindow.xaml.cs         # + PasswordBox.PasswordChanged binding
+│   ├── ViewModels/
+│   │   └── MainViewModel.cs           # + UseMockApi toggle, apartment info
+│   └── Converters/
+│       └── Converters.cs
+├── Infrastructure/
+│   ├── MvvmBase.cs
+│   └── EventAggregator.cs
+└── Resources/  icon_16.png, icon_32.png
 ```
+
+---
 
 ## Требования
 
 - **Autodesk Revit 2024** (или новее)
 - **.NET Framework 4.8**
 - **Visual Studio 2022** (17.x)
-- NuGet-пакеты: `Newtonsoft.Json`, `NLog`
+- NuGet: `Newtonsoft.Json 13.x`, `NLog 5.x`
+
+---
 
 ## Установка
 
 ### Для разработки
 
 1. Откройте `RevitPlanningPlugin.sln` в Visual Studio.
-2. Убедитесь, что пути к `RevitAPI.dll` и `RevitAPIUI.dll` в `.csproj` указывают на вашу установку Revit.
+2. Убедитесь, что пути к `RevitAPI.dll` / `RevitAPIUI.dll` в `.csproj` указывают на вашу установку.
 3. Соберите проект (`Ctrl+Shift+B`).
 
 ### Для использования
 
-1. Скопируйте собранную DLL и файл `.addin` в папку Revit Add-ins:
+1. Скопируйте в папку Revit Add-ins:
    ```
    %AppData%\Autodesk\Revit\Addins\2024\
    ```
-2. Скопируйте файлы:
-   - `RevitPlanningPlugin.dll`
-   - `RevitPlanningPlugin.addin`
-   - `Newtonsoft.Json.dll`
-   - `NLog.dll`
-   - Папку `Resources/` (иконки)
+   Файлы: `RevitPlanningPlugin.dll`, `RevitPlanningPlugin.addin`,
+   `Newtonsoft.Json.dll`, `NLog.dll`, папка `Resources/`.
 
-3. Перезапустите Revit.
-4. В Ribbon появится вкладка **«Планировки»** с кнопкой **«Генератор планировок»**.
+2. Перезапустите Revit.
+3. В Ribbon появится вкладка **«Планировки»** → кнопка **«Генератор планировок»**.
+
+---
 
 ## Настройка API
 
-При первом запуске откройте вкладку **«Подключение»** и укажите:
+Вкладка **«1. Подключение»**:
 
-| Параметр       | Описание                                          |
-|----------------|---------------------------------------------------|
-| Base URL       | Базовый URL внешнего API                           |
-| Окружение      | dev / stage / prod                                 |
-| API Key        | Ключ доступа (хранится зашифрованно через DPAPI)   |
-| Bearer Token   | OAuth-токен (хранится зашифрованно)                |
-| Таймаут        | Таймаут запросов в секундах (по умолчанию 30)      |
+| Параметр         | Описание                                                      |
+|------------------|---------------------------------------------------------------|
+| Base URL         | Базовый URL внешнего API                                      |
+| Окружение        | dev / stage / prod                                            |
+| API Key          | Ключ доступа (хранится зашифрованно через DPAPI)              |
+| Bearer Token     | OAuth-токен (хранится зашифрованно)                           |
+| Таймаут (сек)    | Таймаут HTTP-запросов (по умолчанию 30 с)                     |
+| Mock-режим       | Работа без реального API — для разработки и тестирования      |
 
-Настройки сохраняются в:
-```
-%AppData%\RevitPlanningPlugin\settings.json
-```
+Настройки: `%AppData%\RevitPlanningPlugin\settings.json`
+
+---
 
 ## Пользовательский сценарий
 
-1. **Подключение** — настройте доступ к API, проверьте соединение.
-2. **Контуры** — загрузите список контуров, выберите нужный. Контур отобразится на активном уровне Revit.
-3. **Генерация** — задайте параметры (количество вариантов, площади, ширина коридора, приоритет) и запустите генерацию.
-4. **Результаты** — переключайтесь между вариантами в галерее. Для каждого отображаются метрики и список помещений. При выборе варианта — предпросмотр поверх контура.
-5. **Применение** — примените вариант как:
-   - **Разделители + помещения** (Room Separation Lines + Room элементы) — концептуальный режим.
-   - **Стены + помещения** — со стенами из первого доступного типа в проекте.
+### Базовый сценарий
+1. **Подключение** — настройте доступ к API (или включите Mock-режим) и проверьте соединение.
+2. **Контур** — загрузите список, выберите контур, он отобразится на активном уровне Revit.
+3. **Генерация** — задайте:
+   - Количество вариантов (1–20)
+   - **Состав квартир**: студии, 1К, 2К, 3К, 4К и их количество
+   - Мин./макс. площадь квартиры
+   - **Целевую площадь МОПов** (0 = автоматически)
+   - Минимальную ширину коридора МОП
+   - Приоритет оптимизации
+4. **Результаты** — галерея вариантов с метриками квартир и МОПов.
+   Переключение стрелками ← → или в списке. Предпросмотр поверх контура.
+5. **Применение** — концептуальный режим (разделители + помещения) или со стенами.
 
-При повторном применении предыдущие элементы автоматически удаляются (без дублирования).
+### Сценарий корректировки (ТЗ 3.2)
+- После первичной генерации измените параметры (площадь МОПов, состав квартир и т.д.).
+- Нажмите **«Сгенерировать»** повторно — новые варианты заменят предыдущие.
+
+---
 
 ## API-контракт
 
-Плагин ожидает REST/JSON API по HTTPS со следующими эндпоинтами:
+REST/JSON по HTTPS:
 
-| Метод | Путь                    | Описание                     |
-|-------|-------------------------|------------------------------|
-| GET   | /health                 | Проверка доступности         |
-| GET   | /contours               | Список контуров              |
-| GET   | /contours/{id}          | Данные контура (геометрия)   |
-| POST  | /generate               | Запуск генерации планировок  |
+| Метод | Путь            | Описание                    |
+|-------|-----------------|-----------------------------|
+| GET   | /health         | Проверка доступности        |
+| GET   | /contours       | Список контуров             |
+| GET   | /contours/{id}  | Геометрия контура           |
+| POST  | /generate       | Запуск AI-генерации         |
 
-Подробные DTO описаны в `Models/Api/ApiDtos.cs`.
+### Параметры запроса генерации (`POST /generate`)
+
+```json
+{
+  "contour_id": "building-1",
+  "variant_count": 3,
+  "apartment_types": { "Studio": 2, "OneRoom": 4, "TwoRoom": 6, "ThreeRoom": 2 },
+  "min_apartment_area": 25.0,
+  "max_apartment_area": 120.0,
+  "mop_area_target": 80.0,
+  "min_corridor_width": 1.4,
+  "optimization_priority": "efficiency"
+}
+```
+
+### Ответ генерации (на каждый вариант)
+
+```json
+{
+  "id": "v1",
+  "variant_index": 1,
+  "total_area": 600.0,
+  "usable_area": 480.0,
+  "mop_area": 72.0,
+  "corridor_area": 40.0,
+  "apartment_count": 14,
+  "apartment_type_distribution": { "OneRoom": 4, "TwoRoom": 6, "ThreeRoom": 4 },
+  "efficiency_score": 82,
+  "rooms": [...],
+  "partitions": [...]
+}
+```
+
+Подробные DTO: `Models/Api/ApiDtos.cs`
+
+---
 
 ## Безопасность
 
-- API-ключи и токены шифруются через **Windows DPAPI** (DataProtectionScope.CurrentUser).
-- Секреты маскируются в логах (`***MASKED***`).
-- Весь трафик передаётся по HTTPS.
+- API-ключи и токены шифруются через **Windows DPAPI** (`DataProtectionScope.CurrentUser`).
+- Секреты маскируются в логах.
+- Весь трафик — по HTTPS.
+- PasswordBox не использует binding (WPF security) — значения передаются через `PasswordChanged`.
+
+---
 
 ## Логирование
 
-Логи записываются в:
 ```
 %AppData%\RevitPlanningPlugin\Logs\plugin_YYYY-MM-DD.log
 ```
-Хранятся 30 дней, автоматическая ротация.
+Ротация: 30 дней. Логируются API-вызовы, ответы, ошибки парсинга и Revit API.
+
+---
 
 ## Ограничения MVP
 
-- Поддержка одного уровня/этажа.
-- Концептуальное моделирование (разделители и Room-элементы, опционально стены).
-- API-контракт может измениться — слой DTO изолирует доменную логику.
-- Нет поддержки ядер, шахт, лестничных клеток (планируется в следующих итерациях).
-
-## Расширение
-
-Архитектура спроектирована для расширяемости:
-- `IPlanningApiClient` — интерфейс для подключения альтернативных API.
-- `DtoMapper` — изоляция от изменений API-контракта.
-- `EventAggregator` — слабая связность между модулями.
-- Модуль валидации легко расширить новыми правилами.
+- Один уровень/этаж (поддержка нескольких — следующие итерации).
+- Концептуальное моделирование: разделители и Room-элементы, опционально стены.
+- Ядра, шахты, лестничные клетки — следующие итерации.
+- API-контракт может измениться: слой DTO (`DtoMapper`) изолирует доменную логику.
