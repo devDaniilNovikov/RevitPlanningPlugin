@@ -186,6 +186,8 @@ namespace RevitPlanningPlugin.UI.ViewModels
                     PreviewVariant(value);
                 OnPropertyChanged(nameof(HasSelectedVariant));
                 OnPropertyChanged(nameof(VariantInfo));
+                OnPropertyChanged(nameof(VariantApartmentTypeSummary));
+                OnPropertyChanged(nameof(HasApartmentTypeInfo));
                 OnPropertyChanged(nameof(SelectedVariantIndex));
                 OnPropertyChanged(nameof(VariantNavigationInfo));
             }
@@ -219,6 +221,11 @@ namespace RevitPlanningPlugin.UI.ViewModels
         public string VariantInfo => _selectedVariant != null
             ? _selectedVariant.MetricsDetail
             : string.Empty;
+
+        public string VariantApartmentTypeSummary => _selectedVariant?.ApartmentTypeSummary ?? string.Empty;
+
+        public bool HasApartmentTypeInfo =>
+            _selectedVariant != null && _selectedVariant.ApartmentTypeDistribution.Count > 0;
 
         // ═══════════════════════════════════════════
         //  Валидация
@@ -307,7 +314,17 @@ namespace RevitPlanningPlugin.UI.ViewModels
         private void InitializeApiClient()
         {
             (_apiClient as IDisposable)?.Dispose();
-            _apiClient = new PlanningApiClient(Settings);
+
+            if (Settings.UseMockApi)
+            {
+                _apiClient = new MockPlanningApiClient();
+                PluginLogger.Info("API-клиент: режим Mock (без реального API).");
+            }
+            else
+            {
+                _apiClient = new PlanningApiClient(Settings);
+                PluginLogger.Info($"API-клиент: реальный API ({Settings.EffectiveBaseUrl}).");
+            }
         }
 
         private async Task TestConnectionAsync()

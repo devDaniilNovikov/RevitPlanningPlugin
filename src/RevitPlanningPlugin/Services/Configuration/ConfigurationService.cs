@@ -22,6 +22,12 @@ namespace RevitPlanningPlugin.Services.Configuration
         public bool AutoValidateContours { get; set; } = true;
         public string LogLevel { get; set; } = "Info";
 
+        /// <summary>
+        /// Использовать мок-клиент вместо реального API.
+        /// Удобно для разработки и тестирования без доступа к внешнему сервису.
+        /// </summary>
+        public bool UseMockApi { get; set; } = false;
+
         /// <summary>Базовый URL для выбранного окружения.</summary>
         [JsonIgnore]
         public string EffectiveBaseUrl
@@ -98,7 +104,8 @@ namespace RevitPlanningPlugin.Services.Configuration
                 MaxRetries = settings.MaxRetries,
                 SourceUnit = settings.SourceUnit,
                 AutoValidateContours = settings.AutoValidateContours,
-                LogLevel = settings.LogLevel
+                LogLevel = settings.LogLevel,
+                UseMockApi = settings.UseMockApi
             };
 
             var json = JsonConvert.SerializeObject(toSave, Formatting.Indented);
