@@ -102,9 +102,10 @@ namespace RevitPlanningPlugin.Services.Geometry
 
         private void ValidateOrientation(BuildingContour contour, ValidationResult result)
         {
-            // Проверяем обход против часовой стрелки (стандарт для внешнего контура)
+            // Формула Шёлейса: положительная площадь → CCW (правильная ориентация),
+            // отрицательная площадь → CW (предупреждение).
             var signedArea = ComputeSignedArea(contour.GetOuterVertices());
-            if (signedArea > 0)
+            if (signedArea < 0)
                 result.AddWarning("Контур имеет обход по часовой стрелке. Рекомендуется против часовой.", "CW_ORIENTATION");
         }
 

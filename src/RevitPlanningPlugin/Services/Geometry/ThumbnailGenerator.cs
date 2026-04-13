@@ -105,7 +105,7 @@ namespace RevitPlanningPlugin.Services.Geometry
                 {
                     var (lx, ly) = transform(room.LabelPoint);
                     var shortName = room.Name.Length > 6 ? room.Name.Substring(0, 6) : room.Name;
-                    sb.AppendLine($"<text x='{F(lx)}' y='{F(ly)}' font-size='6' fill='#666' text-anchor='middle' dominant-baseline='middle'>{shortName}</text>");
+                    sb.AppendLine($"<text x='{F(lx)}' y='{F(ly)}' font-size='6' fill='#666' text-anchor='middle' dominant-baseline='middle'>{HtmlEncode(shortName)}</text>");
                 }
             }
 
@@ -154,5 +154,13 @@ namespace RevitPlanningPlugin.Services.Geometry
         }
 
         private static string F(double val) => val.ToString("F1", CultureInfo.InvariantCulture);
+
+        /// <summary>Экранирует спецсимволы XML/SVG в строке.</summary>
+        private static string HtmlEncode(string text)
+            => text
+                .Replace("&", "&amp;")
+                .Replace("<", "&lt;")
+                .Replace(">", "&gt;")
+                .Replace("\"", "&quot;");
     }
 }
