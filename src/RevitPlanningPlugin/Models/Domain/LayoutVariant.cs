@@ -31,5 +31,19 @@ namespace RevitPlanningPlugin.Models.Domain
 
         public Dictionary<string, double> CustomMetrics { get; set; } = new();
         public Dictionary<string, string> Metadata { get; set; } = new();
+
+        // ——— Миниатюра для каталожного просмотра ———
+
+        /// <summary>SVG-миниатюра варианта (генерируется локально для быстрого отображения в галерее).</summary>
+        public string? ThumbnailSvg { get; set; }
+
+        /// <summary>Краткое текстовое описание для каталога.</summary>
+        public string CatalogSummary =>
+            $"{RoomCount} пом. | {UsableRatio:P0} полезн. | Score {EfficiencyScore:F0}";
+
+        /// <summary>Детальная строка метрик.</summary>
+        public string MetricsDetail =>
+            $"Общая: {TotalArea:F1} м² | Полезная: {UsableArea:F1} м² | " +
+            $"Коридоры: {CorridorArea:F1} м² | Эффективность: {UsableRatio:P1}";
     }
 }

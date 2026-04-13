@@ -63,4 +63,26 @@ namespace RevitPlanningPlugin.UI.Converters
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
             => value is Visibility.Visible;
     }
+
+    /// <summary>
+    /// Конвертирует (ratio 0–1, parentWidth) → ширина полоски для визуального бара эффективности.
+    /// </summary>
+    public class RatioToWidthConverter : IMultiValueConverter
+    {
+        public static readonly RatioToWidthConverter Instance = new();
+
+        public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (values.Length >= 2
+                && values[0] is double ratio
+                && values[1] is double parentWidth)
+            {
+                return Math.Max(0, Math.Min(parentWidth, parentWidth * ratio));
+            }
+            return 0.0;
+        }
+
+        public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
+            => throw new NotImplementedException();
+    }
 }

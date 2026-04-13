@@ -12,7 +12,8 @@ namespace RevitPlanningPlugin.Services.Api
 {
     /// <summary>
     /// Мок-клиент для тестирования плагина без реального API.
-    /// Генерирует демонстрационные контуры и планировки.
+    /// Демонстрирует: ортогональные, неортогональные и органичные контуры,
+    /// пакетную генерацию, разнообразные планировки.
     /// </summary>
     public class MockPlanningApiClient : IPlanningApiClient
     {
@@ -26,9 +27,18 @@ namespace RevitPlanningPlugin.Services.Api
         {
             var list = new List<ApiContourSummaryDto>
             {
-                new() { Id = "demo-rect", Name = "Прямоугольный контур 30×20м", Area = 600, Description = "Типовой прямоугольный этаж" },
-                new() { Id = "demo-lshape", Name = "Г-образный контур", Area = 450, Description = "L-shape этаж" },
-                new() { Id = "demo-complex", Name = "Сложный контур с вырезом", Area = 520, Description = "Неортогональная форма" }
+                new() { Id = "demo-rect", Name = "Прямоугольный 30×20м", Area = 600,
+                    Description = "Ортогональный типовой этаж" },
+                new() { Id = "demo-lshape", Name = "Г-образный контур", Area = 450,
+                    Description = "Неортогональный L-shape этаж" },
+                new() { Id = "demo-polygon", Name = "Пятиугольник", Area = 520,
+                    Description = "Неортогональная форма с наклонными гранями" },
+                new() { Id = "demo-organic", Name = "Органичная форма (дуги)", Area = 480,
+                    Description = "Криволинейный контур с дугами и скруглениями" },
+                new() { Id = "demo-spline", Name = "Свободная форма (сплайн)", Area = 550,
+                    Description = "Органичный фасад со сплайновыми кривыми" },
+                new() { Id = "demo-courtyard", Name = "С внутренним двором", Area = 700,
+                    Description = "Прямоугольник с внутренним вырезом" }
             };
             PluginLogger.Info($"[Mock] GetContourList → {list.Count} контуров");
             return Task.FromResult(list);
@@ -36,28 +46,35 @@ namespace RevitPlanningPlugin.Services.Api
 
         public async Task<BuildingContour> GetContourAsync(string contourId, CancellationToken ct = default)
         {
-            await Task.Delay(300, ct); // имитация задержки
+            await Task.Delay(200, ct); // быстрая имитация
 
             var contour = contourId switch
             {
                 "demo-rect" => CreateRectContour(),
                 "demo-lshape" => CreateLShapeContour(),
-                "demo-complex" => CreateComplexContour(),
+                "demo-polygon" => CreatePolygonContour(),
+                "demo-organic" => CreateOrganicContour(),
+                "demo-spline" => CreateSplineContour(),
+                "demo-courtyard" => CreateCourtyardContour(),
                 _ => CreateRectContour()
             };
 
-            PluginLogger.Info($"[Mock] GetContour '{contourId}' → {contour.OuterLoop.Count} сегментов");
+            PluginLogger.Info($"[Mock] GetContour '{contourId}' → {contour.OuterLoop.Count} сегментов, " +
+                $"тип: {contour.GeometryDescription}");
             return contour;
         }
 
         public async Task<List<LayoutVariant>> GenerateLayoutsAsync(
             string contourId, GenerationParameters parameters, CancellationToken ct = default)
         {
-            await Task.Delay(1500, ct); // имитация генерации
+            // Пакетная генерация: все варианты за один запрос
+            // Имитируем быструю генерацию: ~100ms на вариант
+            var delay = Math.Min(parameters.VariantCount * 100, 2000);
+            await Task.Delay(delay, ct);
 
-            var variants = new List<LayoutVariant>();
             var contour = await GetContourAsync(contourId, ct);
             var totalArea = contour.ApproximateArea;
+            var variants = new List<LayoutVariant>();
 
             for (int i = 0; i < parameters.VariantCount; i++)
             {
@@ -65,25 +82,26 @@ namespace RevitPlanningPlugin.Services.Api
                 variants.Add(GenerateDemoVariant(contour, i, totalArea, parameters));
             }
 
-            PluginLogger.Info($"[Mock] Generate → {variants.Count} вариантов для '{contourId}'");
+            PluginLogger.Info($"[Mock] Пакетная генерация → {variants.Count} вариантов " +
+                $"для '{contourId}' за {delay}ms");
             return variants;
         }
 
-        // ——— Генерация демо-контуров ———
+        // ═══════════════════════════════════════════
+        //  Демо-контуры: ортогональные
+        // ═══════════════════════════════════════════
 
         private static BuildingContour CreateRectContour()
         {
-            // Прямоугольник 30×20 м
             var pts = new[] {
                 new Point2D(0, 0), new Point2D(30, 0),
                 new Point2D(30, 20), new Point2D(0, 20)
             };
-            return ContourFromPoints("demo-rect", "Прямоугольный контур 30×20м", pts);
+            return ContourFromPoints("demo-rect", "Прямоугольный 30×20м", pts);
         }
 
         private static BuildingContour CreateLShapeContour()
         {
-            // Г-образный контур
             var pts = new[] {
                 new Point2D(0, 0), new Point2D(30, 0),
                 new Point2D(30, 12), new Point2D(18, 12),
@@ -92,18 +110,144 @@ namespace RevitPlanningPlugin.Services.Api
             return ContourFromPoints("demo-lshape", "Г-образный контур", pts);
         }
 
-        private static BuildingContour CreateComplexContour()
+        // ═══════════════════════════════════════════
+        //  Демо-контуры: неортогональные
+        // ═══════════════════════════════════════════
+
+        private static BuildingContour CreatePolygonContour()
         {
-            // Пятиугольник
             var pts = new[] {
-                new Point2D(0, 0), new Point2D(28, 0),
-                new Point2D(32, 10), new Point2D(20, 22),
-                new Point2D(0, 18)
+                new Point2D(5, 0), new Point2D(25, 0),
+                new Point2D(32, 8), new Point2D(28, 22),
+                new Point2D(15, 25), new Point2D(0, 18), new Point2D(0, 6)
             };
-            return ContourFromPoints("demo-complex", "Сложный контур", pts);
+            return ContourFromPoints("demo-polygon", "Пятиугольник (неортогональный)", pts);
         }
 
+        // ═══════════════════════════════════════════
+        //  Демо-контуры: органичные (дуги, сплайны)
+        // ═══════════════════════════════════════════
+
+        private static BuildingContour CreateOrganicContour()
+        {
+            // Контур со скруглёнными углами (линии + дуги)
+            var segments = new List<ContourSegment>
+            {
+                // Нижняя сторона
+                new() { Type = SegmentType.Line, Start = new Point2D(5, 0), End = new Point2D(25, 0) },
+                // Скругление правого нижнего угла
+                new() {
+                    Type = SegmentType.Arc,
+                    Start = new Point2D(25, 0), End = new Point2D(30, 5),
+                    ArcCenter = new Point2D(25, 5), ArcRadius = 5, ArcClockwise = false
+                },
+                // Правая сторона
+                new() { Type = SegmentType.Line, Start = new Point2D(30, 5), End = new Point2D(30, 15) },
+                // Скругление правого верхнего угла
+                new() {
+                    Type = SegmentType.Arc,
+                    Start = new Point2D(30, 15), End = new Point2D(25, 20),
+                    ArcCenter = new Point2D(25, 15), ArcRadius = 5, ArcClockwise = false
+                },
+                // Верхняя сторона
+                new() { Type = SegmentType.Line, Start = new Point2D(25, 20), End = new Point2D(5, 20) },
+                // Скругление левого верхнего угла
+                new() {
+                    Type = SegmentType.Arc,
+                    Start = new Point2D(5, 20), End = new Point2D(0, 15),
+                    ArcCenter = new Point2D(5, 15), ArcRadius = 5, ArcClockwise = false
+                },
+                // Левая сторона
+                new() { Type = SegmentType.Line, Start = new Point2D(0, 15), End = new Point2D(0, 5) },
+                // Скругление левого нижнего угла
+                new() {
+                    Type = SegmentType.Arc,
+                    Start = new Point2D(0, 5), End = new Point2D(5, 0),
+                    ArcCenter = new Point2D(5, 5), ArcRadius = 5, ArcClockwise = false
+                }
+            };
+
+            return new BuildingContour
+            {
+                Id = "demo-organic",
+                Name = "Органичная форма (дуги)",
+                SourceUnit = "m",
+                OuterLoop = segments
+            };
+        }
+
+        private static BuildingContour CreateSplineContour()
+        {
+            // Контур с криволинейным фасадом (сплайн)
+            var segments = new List<ContourSegment>
+            {
+                // Нижняя прямая сторона
+                new() { Type = SegmentType.Line, Start = new Point2D(0, 0), End = new Point2D(30, 0) },
+                // Правая сторона — сплайн (органичный фасад)
+                new() {
+                    Type = SegmentType.Spline,
+                    Start = new Point2D(30, 0), End = new Point2D(28, 22),
+                    SplineControlPoints = new List<Point2D> {
+                        new(32, 5), new(34, 10), new(33, 15), new(30, 20)
+                    }
+                },
+                // Верхняя сторона — слегка волнистый сплайн
+                new() {
+                    Type = SegmentType.Spline,
+                    Start = new Point2D(28, 22), End = new Point2D(0, 20),
+                    SplineControlPoints = new List<Point2D> {
+                        new(20, 24), new(10, 19)
+                    }
+                },
+                // Левая прямая сторона
+                new() { Type = SegmentType.Line, Start = new Point2D(0, 20), End = new Point2D(0, 0) }
+            };
+
+            return new BuildingContour
+            {
+                Id = "demo-spline",
+                Name = "Свободная форма (сплайн)",
+                SourceUnit = "m",
+                OuterLoop = segments
+            };
+        }
+
+        // ═══════════════════════════════════════════
+        //  Демо-контуры: с внутренним вырезом
+        // ═══════════════════════════════════════════
+
+        private static BuildingContour CreateCourtyardContour()
+        {
+            var outer = new[] {
+                new Point2D(0, 0), new Point2D(35, 0),
+                new Point2D(35, 25), new Point2D(0, 25)
+            };
+            var inner = new[] {
+                new Point2D(10, 8), new Point2D(25, 8),
+                new Point2D(25, 17), new Point2D(10, 17)
+            };
+
+            var contour = ContourFromPoints("demo-courtyard", "С внутренним двором", outer);
+            contour.InnerLoops.Add(LoopFromPoints(inner));
+            return contour;
+        }
+
+        // ═══════════════════════════════════════════
+        //  Утилиты
+        // ═══════════════════════════════════════════
+
         private static BuildingContour ContourFromPoints(string id, string name, Point2D[] pts)
+        {
+            return new BuildingContour
+            {
+                Id = id,
+                Name = name,
+                SourceUnit = "m",
+                OuterLoop = LoopFromPoints(pts)
+            };
+        }
+
+        private static List<ContourSegment> LoopFromPoints(Point2D[] pts)
         {
             var segments = new List<ContourSegment>();
             for (int i = 0; i < pts.Length; i++)
@@ -116,17 +260,12 @@ namespace RevitPlanningPlugin.Services.Api
                     End = next
                 });
             }
-
-            return new BuildingContour
-            {
-                Id = id,
-                Name = name,
-                SourceUnit = "m",
-                OuterLoop = segments
-            };
+            return segments;
         }
 
-        // ——— Генерация демо-вариантов планировки ———
+        // ═══════════════════════════════════════════
+        //  Генерация демо-вариантов планировки
+        // ═══════════════════════════════════════════
 
         private static LayoutVariant GenerateDemoVariant(
             BuildingContour contour, int index, double totalArea, GenerationParameters parms)
@@ -134,7 +273,6 @@ namespace RevitPlanningPlugin.Services.Api
             var rng = new Random(42 + index);
             var vertices = contour.GetOuterVertices();
 
-            // Вычислим bounding box
             double minX = vertices.Min(p => p.X);
             double maxX = vertices.Max(p => p.X);
             double minY = vertices.Min(p => p.Y);
@@ -143,9 +281,9 @@ namespace RevitPlanningPlugin.Services.Api
             double width = maxX - minX;
             double height = maxY - minY;
 
-            // Количество делений по X и Y
-            int nx = 2 + index % 3;  // 2, 3, 4
-            int ny = 2 + (index + 1) % 2;  // 2, 3
+            // Разные стратегии деления для разных вариантов
+            int nx = 2 + index % 4;   // 2..5
+            int ny = 2 + (index + 1) % 3; // 2..4
 
             var rooms = new List<RoomLayout>();
             var partitions = new List<ContourSegment>();
@@ -153,22 +291,23 @@ namespace RevitPlanningPlugin.Services.Api
             var roomTypes = new[] {
                 RoomType.LivingRoom, RoomType.Bedroom, RoomType.Kitchen,
                 RoomType.Bathroom, RoomType.Corridor, RoomType.Office,
-                RoomType.MeetingRoom, RoomType.Storage
+                RoomType.MeetingRoom, RoomType.Storage, RoomType.OpenSpace
             };
 
             var roomNames = new[] {
                 "Гостиная", "Спальня", "Кухня", "Санузел", "Коридор",
-                "Кабинет", "Переговорная", "Кладовая"
+                "Кабинет", "Переговорная", "Кладовая", "Open Space"
             };
 
             double cellW = width / nx;
             double cellH = height / ny;
             int roomIdx = 0;
 
-            // Горизонтальные перегородки
+            // Генерируем перегородки с лёгким рандомным смещением (разные планировки)
             for (int j = 1; j < ny; j++)
             {
-                double y = minY + j * cellH;
+                double y = minY + j * cellH + (rng.NextDouble() - 0.5) * cellH * 0.15;
+                y = Math.Max(minY + 1, Math.Min(maxY - 1, y));
                 partitions.Add(new ContourSegment
                 {
                     Type = SegmentType.Line,
@@ -177,10 +316,10 @@ namespace RevitPlanningPlugin.Services.Api
                 });
             }
 
-            // Вертикальные перегородки
             for (int i = 1; i < nx; i++)
             {
-                double x = minX + i * cellW;
+                double x = minX + i * cellW + (rng.NextDouble() - 0.5) * cellW * 0.15;
+                x = Math.Max(minX + 1, Math.Min(maxX - 1, x));
                 partitions.Add(new ContourSegment
                 {
                     Type = SegmentType.Line,
@@ -199,7 +338,7 @@ namespace RevitPlanningPlugin.Services.Api
                     double x1 = x0 + cellW;
                     double y1 = y0 + cellH;
 
-                    var typeIdx = roomIdx % roomTypes.Length;
+                    var typeIdx = (roomIdx + index) % roomTypes.Length;
                     var area = cellW * cellH;
 
                     rooms.Add(new RoomLayout
@@ -224,7 +363,7 @@ namespace RevitPlanningPlugin.Services.Api
 
             double usableArea = rooms.Where(r => r.Type != RoomType.Corridor).Sum(r => r.Area);
             double corridorArea = rooms.Where(r => r.Type == RoomType.Corridor).Sum(r => r.Area);
-            double score = 60 + rng.Next(0, 35);
+            double score = 55 + rng.Next(0, 40);
 
             return new LayoutVariant
             {

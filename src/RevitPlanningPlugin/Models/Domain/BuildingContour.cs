@@ -65,5 +65,43 @@ namespace RevitPlanningPlugin.Models.Domain
                 return first.Equals(last);
             }
         }
+
+        /// <summary>Содержит ли контур криволинейные сегменты (неортогональный / органичный).</summary>
+        public bool HasCurvedGeometry => OuterLoop.Any(s => s.IsCurved) 
+            || InnerLoops.Any(loop => loop.Any(s => s.IsCurved));
+
+        /// <summary>Типы кривых, используемые в контуре.</summary>
+        public string GeometryDescription
+        {
+            get
+            {
+                var types = OuterLoop.Select(s => s.Type).Distinct().OrderBy(t => t);
+                var desc = string.Join(", ", types);
+                return HasCurvedGeometry ? $"Неортогональный ({desc})" : $"Ортогональный ({desc})";
+            }
+        }
+
+        /// <summary>
+        /// История генераций для этого контура.
+        /// Ключ — timestamp, значение — список вариантов.
+        /// Позволяет получить все сгенерированные планы по одному контуру.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public Dictionary<DateTime, List<LayoutVariant>> GenerationHistory { get; } = new();
+
+        /// <summary>Общее количество сгенерированных вариантов по этому контуру.</summary>
+        public int TotalGeneratedVariants => GenerationHistory.Values.Sum(v => v.Count);
+
+        /// <summary>Добавить результат генерации в историю.</summary>
+        public void AddGenerationResult(List<LayoutVariant> variants)
+        {
+            GenerationHistory[DateTime.Now] = variants;
+        }
+
+        /// <summary>Получить все варианты, когда-либо сгенерированные для этого контура.</summary>
+        public List<LayoutVariant> GetAllVariants()
+        {
+            return GenerationHistory.Values.SelectMany(v => v).ToList();
+        }
     }
 }

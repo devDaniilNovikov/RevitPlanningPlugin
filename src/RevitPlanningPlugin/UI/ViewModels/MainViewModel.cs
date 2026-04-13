@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,6 +21,12 @@ using RevitPlanningPlugin.Services.Logging;
 
 namespace RevitPlanningPlugin.UI.ViewModels
 {
+    /// <summary>
+    /// Главная ViewModel плагина.
+    /// Оркестрирует полный бесшовный цикл:
+    /// подключение → контур → генерация → каталог вариантов → применение.
+    /// Пользователь работает исключительно внутри Revit, без экспорта/импорта.
+    /// </summary>
     public class MainViewModel : ObservableObject
     {
         // ——— Зависимости ———
@@ -35,6 +42,8 @@ namespace RevitPlanningPlugin.UI.ViewModels
         private BuildingContour? _currentContour;
         private LayoutVariant? _selectedVariant;
         private CancellationTokenSource? _cts;
+        private int _generationProgress;
+        private string _generationElapsed = string.Empty;
 
         public MainViewModel(ExternalCommandData commandData)
         {
@@ -46,7 +55,9 @@ namespace RevitPlanningPlugin.UI.ViewModels
             InitializeCommands();
         }
 
-        // ——— Свойства ———
+        // ═══════════════════════════════════════════
+        //  Свойства: состояние, статус, прогресс
+        // ═══════════════════════════════════════════
 
         public PluginSettings Settings { get; private set; }
 
@@ -58,6 +69,7 @@ namespace RevitPlanningPlugin.UI.ViewModels
                 SetProperty(ref _status, value);
                 OnPropertyChanged(nameof(IsIdle));
                 OnPropertyChanged(nameof(IsBusy));
+                OnPropertyChanged(nameof(IsGenerating));
             }
         }
 
@@ -69,8 +81,26 @@ namespace RevitPlanningPlugin.UI.ViewModels
 
         public bool IsIdle => Status == GenerationStatus.Idle || Status == GenerationStatus.Completed;
         public bool IsBusy => !IsIdle;
+        public bool IsGenerating => Status == GenerationStatus.Generating;
 
-        // Контуры
+        /// <summary>Прогресс генерации (0–100).</summary>
+        public int GenerationProgress
+        {
+            get => _generationProgress;
+            set => SetProperty(ref _generationProgress, value);
+        }
+
+        /// <summary>Затраченное время на генерацию.</summary>
+        public string GenerationElapsed
+        {
+            get => _generationElapsed;
+            set => SetProperty(ref _generationElapsed, value);
+        }
+
+        // ═══════════════════════════════════════════
+        //  Свойства: контуры
+        // ═══════════════════════════════════════════
+
         public ObservableCollection<ApiContourSummaryDto> AvailableContours { get; } = new();
 
         private ApiContourSummaryDto? _selectedContourSummary;
@@ -92,6 +122,8 @@ namespace RevitPlanningPlugin.UI.ViewModels
                 SetProperty(ref _currentContour, value);
                 OnPropertyChanged(nameof(HasContour));
                 OnPropertyChanged(nameof(ContourInfo));
+                OnPropertyChanged(nameof(ContourGeometryInfo));
+                OnPropertyChanged(nameof(GenerationHistoryInfo));
             }
         }
 
@@ -103,11 +135,47 @@ namespace RevitPlanningPlugin.UI.ViewModels
               $"{_currentContour.OuterLoop.Count} сегментов"
             : "Контур не загружен";
 
-        // Параметры генерации
+        /// <summary>Описание геометрии: ортогональный / неортогональный / органичный.</summary>
+        public string ContourGeometryInfo => _currentContour != null
+            ? _currentContour.GeometryDescription
+            : string.Empty;
+
+        /// <summary>Инфо об истории генераций для текущего контура.</summary>
+        public string GenerationHistoryInfo => _currentContour != null && _currentContour.TotalGeneratedVariants > 0
+            ? $"Всего сгенерировано: {_currentContour.TotalGeneratedVariants} вариантов за {_currentContour.GenerationHistory.Count} запуск(ов)"
+            : string.Empty;
+
+        // ═══════════════════════════════════════════
+        //  Свойства: параметры генерации
+        // ═══════════════════════════════════════════
+
         public GenerationParameters GenerationParams { get; set; } = new();
 
-        // Варианты
+        // ═══════════════════════════════════════════
+        //  Свойства: варианты (каталожный режим)
+        // ═══════════════════════════════════════════
+
+        /// <summary>Текущий набор вариантов (последняя генерация).</summary>
         public ObservableCollection<LayoutVariant> Variants { get; } = new();
+
+        /// <summary>Все когда-либо сгенерированные варианты для текущего контура.</summary>
+        public ObservableCollection<LayoutVariant> AllVariants { get; } = new();
+
+        /// <summary>Показывать все варианты из истории (или только последнюю генерацию).</summary>
+        private bool _showAllHistory;
+        public bool ShowAllHistory
+        {
+            get => _showAllHistory;
+            set
+            {
+                SetProperty(ref _showAllHistory, value);
+                OnPropertyChanged(nameof(DisplayedVariants));
+            }
+        }
+
+        /// <summary>Коллекция для отображения в галерее.</summary>
+        public ObservableCollection<LayoutVariant> DisplayedVariants
+            => ShowAllHistory ? AllVariants : Variants;
 
         public LayoutVariant? SelectedVariant
         {
@@ -118,18 +186,44 @@ namespace RevitPlanningPlugin.UI.ViewModels
                     PreviewVariant(value);
                 OnPropertyChanged(nameof(HasSelectedVariant));
                 OnPropertyChanged(nameof(VariantInfo));
+                OnPropertyChanged(nameof(SelectedVariantIndex));
+                OnPropertyChanged(nameof(VariantNavigationInfo));
             }
         }
 
         public bool HasSelectedVariant => _selectedVariant != null;
 
+        /// <summary>Индекс выбранного варианта (1-based) для каталожной навигации.</summary>
+        public int SelectedVariantIndex
+        {
+            get
+            {
+                if (_selectedVariant == null) return 0;
+                var list = DisplayedVariants;
+                var idx = list.IndexOf(_selectedVariant);
+                return idx >= 0 ? idx + 1 : 0;
+            }
+        }
+
+        /// <summary>Навигационная строка «3 / 10».</summary>
+        public string VariantNavigationInfo
+        {
+            get
+            {
+                var list = DisplayedVariants;
+                if (list.Count == 0) return string.Empty;
+                return $"{SelectedVariantIndex} / {list.Count}";
+            }
+        }
+
         public string VariantInfo => _selectedVariant != null
-            ? $"Вариант {_selectedVariant.VariantIndex + 1}: " +
-              $"S={_selectedVariant.TotalArea:F1}м², полез.={_selectedVariant.UsableArea:F1}м², " +
-              $"помещ.={_selectedVariant.RoomCount}, score={_selectedVariant.EfficiencyScore:F0}"
+            ? _selectedVariant.MetricsDetail
             : string.Empty;
 
-        // Валидация
+        // ═══════════════════════════════════════════
+        //  Валидация
+        // ═══════════════════════════════════════════
+
         private ValidationResult? _validationResult;
         public ValidationResult? ValidationResult
         {
@@ -145,7 +239,9 @@ namespace RevitPlanningPlugin.UI.ViewModels
             ? string.Join("\n", _validationResult.Issues.Select(i => $"[{i.Severity}] {i.Message}"))
             : string.Empty;
 
-        // ——— Команды ———
+        // ═══════════════════════════════════════════
+        //  Команды
+        // ═══════════════════════════════════════════
 
         public ICommand TestConnectionCommand { get; private set; } = null!;
         public ICommand LoadContoursCommand { get; private set; } = null!;
@@ -155,6 +251,11 @@ namespace RevitPlanningPlugin.UI.ViewModels
         public ICommand ApplyWithWallsCommand { get; private set; } = null!;
         public ICommand SaveSettingsCommand { get; private set; } = null!;
         public ICommand CancelCommand { get; private set; } = null!;
+
+        // Каталожная навигация
+        public ICommand NextVariantCommand { get; private set; } = null!;
+        public ICommand PreviousVariantCommand { get; private set; } = null!;
+        public ICommand ToggleHistoryCommand { get; private set; } = null!;
 
         private void InitializeCommands()
         {
@@ -166,19 +267,47 @@ namespace RevitPlanningPlugin.UI.ViewModels
             ApplyWithWallsCommand = new RelayCommand(ApplySelectedVariantWithWalls, () => HasSelectedVariant && IsIdle);
             SaveSettingsCommand = new RelayCommand(SaveSettings);
             CancelCommand = new RelayCommand(CancelOperation, () => IsBusy);
+
+            // Быстрый переключатель ← →
+            NextVariantCommand = new RelayCommand(NavigateNext, () => HasSelectedVariant);
+            PreviousVariantCommand = new RelayCommand(NavigatePrevious, () => HasSelectedVariant);
+            ToggleHistoryCommand = new RelayCommand(() => ShowAllHistory = !ShowAllHistory);
         }
 
-        // ——— Методы ———
+        // ═══════════════════════════════════════════
+        //  Каталожная навигация
+        // ═══════════════════════════════════════════
+
+        private void NavigateNext()
+        {
+            var list = DisplayedVariants;
+            if (list.Count == 0) return;
+            var idx = list.IndexOf(_selectedVariant);
+            if (idx < list.Count - 1)
+                SelectedVariant = list[idx + 1];
+            else
+                SelectedVariant = list[0]; // цикличный переход
+        }
+
+        private void NavigatePrevious()
+        {
+            var list = DisplayedVariants;
+            if (list.Count == 0) return;
+            var idx = list.IndexOf(_selectedVariant);
+            if (idx > 0)
+                SelectedVariant = list[idx - 1];
+            else
+                SelectedVariant = list[list.Count - 1]; // цикличный переход
+        }
+
+        // ═══════════════════════════════════════════
+        //  Методы: API и подключение
+        // ═══════════════════════════════════════════
 
         private void InitializeApiClient()
         {
-            _apiClient?.Dispose();
-            _apiClient = new PlanningApiClient(Settings);
-        }
-
-        private void Dispose()
-        {
             (_apiClient as IDisposable)?.Dispose();
+            _apiClient = new PlanningApiClient(Settings);
         }
 
         private async Task TestConnectionAsync()
@@ -211,21 +340,14 @@ namespace RevitPlanningPlugin.UI.ViewModels
 
                 SetStatus(GenerationStatus.Idle, $"Загружено {contours.Count} контуров.");
             }
-            catch (OperationCanceledException)
-            {
-                SetStatus(GenerationStatus.Idle, "Отменено.");
-            }
-            catch (PlanningApiException ex)
-            {
-                SetStatus(GenerationStatus.Error, $"API: {ex.Message}");
-                PluginLogger.Error(ex.Message, ex);
-            }
-            catch (Exception ex)
-            {
-                SetStatus(GenerationStatus.Error, $"Ошибка: {ex.Message}");
-                PluginLogger.Error("Ошибка загрузки контуров", ex);
-            }
+            catch (OperationCanceledException) { SetStatus(GenerationStatus.Idle, "Отменено."); }
+            catch (PlanningApiException ex) { SetStatus(GenerationStatus.Error, $"API: {ex.Message}"); PluginLogger.Error(ex.Message, ex); }
+            catch (Exception ex) { SetStatus(GenerationStatus.Error, $"Ошибка: {ex.Message}"); PluginLogger.Error("Ошибка загрузки контуров", ex); }
         }
+
+        // ═══════════════════════════════════════════
+        //  Методы: загрузка контура
+        // ═══════════════════════════════════════════
 
         private async Task LoadSelectedContourAsync()
         {
@@ -247,36 +369,38 @@ namespace RevitPlanningPlugin.UI.ViewModels
 
                 if (!validation.IsValid)
                 {
-                    SetStatus(GenerationStatus.Error, "Контур не прошёл валидацию.");
+                    SetStatus(GenerationStatus.Error, "Контур не прошёл валидацию. Исправьте геометрию или выберите другой.");
                     return;
                 }
 
                 CurrentContour = contour;
 
-                // Отрисовка в Revit
+                // Очищаем предыдущие варианты при смене контура
+                Variants.Clear();
+                AllVariants.Clear();
+                SelectedVariant = null;
+
+                // Отрисовка в Revit — прямо в модели, без экспорта
                 var doc = _commandData.Application.ActiveUIDocument.Document;
                 var view = doc.ActiveView;
                 var level = GetActiveLevel(doc);
-
                 _elementCreator.DrawContour(doc, view, contour, level);
 
-                SetStatus(GenerationStatus.Idle, $"Контур '{contour.Name}' загружен и отображён.");
+                var geoNote = contour.HasCurvedGeometry
+                    ? " (неортогональная/органичная форма)"
+                    : " (ортогональная форма)";
+
+                SetStatus(GenerationStatus.Idle, $"Контур '{contour.Name}' загружен и отображён{geoNote}.");
                 EventAggregator.Instance.Publish(new ContourLoadedEvent { Contour = contour });
             }
-            catch (OperationCanceledException)
-            {
-                SetStatus(GenerationStatus.Idle, "Отменено.");
-            }
-            catch (PlanningApiException ex)
-            {
-                SetStatus(GenerationStatus.Error, $"API: {ex.Message}");
-            }
-            catch (Exception ex)
-            {
-                SetStatus(GenerationStatus.Error, $"Ошибка: {ex.Message}");
-                PluginLogger.Error("Ошибка загрузки контура", ex);
-            }
+            catch (OperationCanceledException) { SetStatus(GenerationStatus.Idle, "Отменено."); }
+            catch (PlanningApiException ex) { SetStatus(GenerationStatus.Error, $"API: {ex.Message}"); }
+            catch (Exception ex) { SetStatus(GenerationStatus.Error, $"Ошибка: {ex.Message}"); PluginLogger.Error("Ошибка загрузки контура", ex); }
         }
+
+        // ═══════════════════════════════════════════
+        //  Методы: пакетная генерация с прогрессом
+        // ═══════════════════════════════════════════
 
         private async Task GenerateAsync()
         {
@@ -284,38 +408,67 @@ namespace RevitPlanningPlugin.UI.ViewModels
 
             try
             {
+                var sw = Stopwatch.StartNew();
+                GenerationProgress = 0;
+                GenerationElapsed = string.Empty;
                 SetStatus(GenerationStatus.Generating,
-                    $"Генерация {GenerationParams.VariantCount} вариантов…");
+                    $"Пакетная генерация {GenerationParams.VariantCount} вариантов…");
                 _cts = new CancellationTokenSource();
+
+                // Прогресс: 10% — отправка, 80% — ожидание, 10% — обработка
+                GenerationProgress = 10;
+                GenerationElapsed = "Отправка запроса…";
 
                 var variants = await _apiClient!.GenerateLayoutsAsync(
                     CurrentContour.Id, GenerationParams, _cts.Token);
 
+                GenerationProgress = 90;
+                GenerationElapsed = $"Получено {variants.Count} вариантов, генерация миниатюр…";
+
+                // Генерация SVG-миниатюр для каталожного отображения
+                ThumbnailGenerator.GenerateThumbnails(variants, CurrentContour);
+
+                // Сохраняем в историю контура
+                CurrentContour.AddGenerationResult(variants);
+
+                // Обновляем текущие варианты
                 Variants.Clear();
                 foreach (var v in variants)
                     Variants.Add(v);
 
+                // Обновляем общий список (все генерации по контуру)
+                AllVariants.Clear();
+                foreach (var v in CurrentContour.GetAllVariants())
+                    AllVariants.Add(v);
+
+                GenerationProgress = 100;
+                sw.Stop();
+                GenerationElapsed = $"Готово за {sw.Elapsed.TotalSeconds:F1} сек";
+
                 if (Variants.Any())
                     SelectedVariant = Variants.First();
 
+                OnPropertyChanged(nameof(GenerationHistoryInfo));
+                OnPropertyChanged(nameof(DisplayedVariants));
+                OnPropertyChanged(nameof(VariantNavigationInfo));
+
                 SetStatus(GenerationStatus.Completed,
-                    $"Получено {variants.Count} вариантов.");
+                    $"Получено {variants.Count} вариантов за {sw.Elapsed.TotalSeconds:F1} сек. " +
+                    $"Всего по контуру: {CurrentContour.TotalGeneratedVariants}.");
                 EventAggregator.Instance.Publish(new GenerationCompletedEvent { Variants = variants });
             }
             catch (OperationCanceledException)
             {
+                GenerationProgress = 0;
                 SetStatus(GenerationStatus.Idle, "Генерация отменена.");
             }
-            catch (PlanningApiException ex)
-            {
-                SetStatus(GenerationStatus.Error, $"API: {ex.Message}");
-            }
-            catch (Exception ex)
-            {
-                SetStatus(GenerationStatus.Error, $"Ошибка генерации: {ex.Message}");
-                PluginLogger.Error("Ошибка генерации", ex);
-            }
+            catch (PlanningApiException ex) { SetStatus(GenerationStatus.Error, $"API: {ex.Message}"); }
+            catch (Exception ex) { SetStatus(GenerationStatus.Error, $"Ошибка генерации: {ex.Message}"); PluginLogger.Error("Ошибка генерации", ex); }
         }
+
+        // ═══════════════════════════════════════════
+        //  Методы: предпросмотр и применение
+        // ═══════════════════════════════════════════
 
         private void PreviewVariant(LayoutVariant variant)
         {
@@ -325,6 +478,7 @@ namespace RevitPlanningPlugin.UI.ViewModels
                 var view = doc.ActiveView;
                 var level = GetActiveLevel(doc);
                 _elementCreator.DrawLayoutPreview(doc, view, variant, level);
+                OnPropertyChanged(nameof(VariantNavigationInfo));
                 EventAggregator.Instance.Publish(new VariantSelectedEvent { Variant = variant });
             }
             catch (Exception ex)
@@ -343,7 +497,7 @@ namespace RevitPlanningPlugin.UI.ViewModels
                 var level = GetActiveLevel(doc);
                 _elementCreator.ApplyLayout(doc, SelectedVariant, level);
                 SetStatus(GenerationStatus.Completed,
-                    $"Вариант '{SelectedVariant.Name}' применён (разделители + помещения).");
+                    $"Вариант #{SelectedVariantIndex} применён (разделители + помещения).");
             }
             catch (Exception ex)
             {
@@ -360,7 +514,6 @@ namespace RevitPlanningPlugin.UI.ViewModels
                 var doc = _commandData.Application.ActiveUIDocument.Document;
                 var level = GetActiveLevel(doc);
 
-                // Берём первый доступный тип стен
                 var wallType = new FilteredElementCollector(doc)
                     .OfClass(typeof(WallType))
                     .Cast<WallType>()
@@ -374,7 +527,7 @@ namespace RevitPlanningPlugin.UI.ViewModels
 
                 _elementCreator.ApplyLayoutWithWalls(doc, SelectedVariant, level, wallType);
                 SetStatus(GenerationStatus.Completed,
-                    $"Вариант '{SelectedVariant.Name}' применён со стенами.");
+                    $"Вариант #{SelectedVariantIndex} применён со стенами.");
             }
             catch (Exception ex)
             {
@@ -382,6 +535,10 @@ namespace RevitPlanningPlugin.UI.ViewModels
                 PluginLogger.Error("Ошибка применения со стенами", ex);
             }
         }
+
+        // ═══════════════════════════════════════════
+        //  Методы: настройки и управление
+        // ═══════════════════════════════════════════
 
         private void SaveSettings()
         {
@@ -393,6 +550,7 @@ namespace RevitPlanningPlugin.UI.ViewModels
         private void CancelOperation()
         {
             _cts?.Cancel();
+            GenerationProgress = 0;
             SetStatus(GenerationStatus.Idle, "Операция отменена.");
         }
 
@@ -405,7 +563,6 @@ namespace RevitPlanningPlugin.UI.ViewModels
 
         private Level GetActiveLevel(Document doc)
         {
-            // Пытаемся взять уровень из активного вида
             if (doc.ActiveView.GenLevel != null)
                 return doc.ActiveView.GenLevel;
 

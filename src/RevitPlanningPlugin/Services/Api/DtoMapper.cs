@@ -76,6 +76,8 @@ namespace RevitPlanningPlugin.Services.Api
             {
                 "arc" => SegmentType.Arc,
                 "spline" => SegmentType.Spline,
+                "ellipse" => SegmentType.Ellipse,
+                "nurbs" or "nurbsspline" or "nurbs_spline" => SegmentType.NurbsSpline,
                 _ => SegmentType.Line
             };
 
