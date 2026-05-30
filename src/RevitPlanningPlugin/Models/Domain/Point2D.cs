@@ -24,8 +24,18 @@ namespace RevitPlanningPlugin.Models.Domain
         }
 
         public override bool Equals(object? obj) => Equals(obj as Point2D);
-        public override int GetHashCode() => HashCode.Combine(
-            Math.Round(X, 6), Math.Round(Y, 6));
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                var hash = 17;
+                hash = hash * 23 + Math.Round(X, 6).GetHashCode();
+                hash = hash * 23 + Math.Round(Y, 6).GetHashCode();
+                return hash;
+            }
+        }
+
         public override string ToString() => $"({X:F4}, {Y:F4})";
     }
 }

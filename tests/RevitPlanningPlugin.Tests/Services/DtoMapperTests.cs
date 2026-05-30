@@ -231,6 +231,9 @@ namespace RevitPlanningPlugin.Tests.Services
             var p = new GenerationParameters
             {
                 VariantCount = 5,
+                GenerationType = GenerationType.MixedUse,
+                ValidationMode = ValidationMode.Strict,
+                TextPrompt = "Сохранить компактные МОП.",
                 StudioCount = 2,
                 OneRoomCount = 4,
                 MinApartmentArea = 30,
@@ -244,6 +247,9 @@ namespace RevitPlanningPlugin.Tests.Services
 
             Assert.Equal("contour-1", dto.ContourId);
             Assert.Equal(5, dto.VariantCount);
+            Assert.Equal("MixedUse", dto.GenerationType);
+            Assert.Equal("Strict", dto.ValidationMode);
+            Assert.Equal("Сохранить компактные МОП.", dto.TextPrompt);
             Assert.Equal(2, dto.ApartmentTypes!["Studio"]);
             Assert.Equal(30.0, dto.MinApartmentArea);
             Assert.Equal(100.0, dto.MaxApartmentArea);
@@ -282,6 +288,63 @@ namespace RevitPlanningPlugin.Tests.Services
             Assert.Null(dto.MaxApartmentArea);
             Assert.Null(dto.MopAreaTarget);
             Assert.Null(dto.MinCorridorWidth);
+        }
+
+        [Fact]
+        public void ToDto_RequestContext_MapsPromptAndRevitContext()
+        {
+            var context = new GenerationRequestContext
+            {
+                RequestId = "req-1",
+                Prompt = "Полный prompt",
+                Contour = new BuildingContour
+                {
+                    Id = "c1",
+                    Name = "Контур",
+                    SourceUnit = "m",
+                    OuterLoop = new List<ContourSegment>
+                    {
+                        new() { Start = new Point2D(0, 0), End = new Point2D(10, 0) }
+                    }
+                },
+                ProjectContext = new RevitProjectContext
+                {
+                    DocumentTitle = "Project.rvt",
+                    ActiveViewName = "Level 1",
+                    ActiveViewType = "FloorPlan",
+                    LevelId = "42",
+                    LevelName = "Level 1",
+                    LevelElevationMeters = 0,
+                    ContourSource = "revit_selection",
+                    ExistingElements = new List<RevitModelElementContext>
+                    {
+                        new()
+                        {
+                            ElementId = "100",
+                            Category = "Walls",
+                            Name = "Wall",
+                            ElementType = "Basic Wall",
+                            LevelName = "Level 1",
+                            Parameters = new Dictionary<string, string> { ["Length"] = "12000" }
+                        }
+                    }
+                },
+                Parameters = new GenerationParameters
+                {
+                    GenerationType = GenerationType.Residential,
+                    ValidationMode = ValidationMode.Advisory
+                }
+            };
+
+            var dto = DtoMapper.ToDto(context);
+
+            Assert.Equal("req-1", dto.RequestId);
+            Assert.Equal("Полный prompt", dto.LlmPrompt);
+            Assert.Equal("c1", dto.Context!.Contour!.Id);
+            Assert.Equal("Project.rvt", dto.Context.RevitContext!.DocumentTitle);
+            Assert.Equal("revit_selection", dto.Context.RevitContext.ContourSource);
+            Assert.Single(dto.Context.RevitContext.ExistingElements);
+            Assert.Equal("Walls", dto.Context.RevitContext.ExistingElements[0].Category);
         }
     }
 }

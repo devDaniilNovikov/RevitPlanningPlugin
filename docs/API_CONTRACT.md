@@ -9,6 +9,37 @@
 | Аутентификация | API Key (заголовок `X-API-Key`) или Bearer Token (`Authorization: Bearer <token>`) |
 | Content-Type | `application/json` |
 
+## Production-режим LM Studio
+
+Для локальной LLM используется backend `LmStudio`. Он обращается к OpenAI-compatible API LM Studio:
+
+| Параметр | Значение по умолчанию |
+|----------|------------------------|
+| Base URL | `http://localhost:1234/v1` |
+| Endpoint | `POST /chat/completions` |
+| Model | `google/gemma-4-e4b` или фактическое имя загруженной модели в LM Studio |
+| Temperature | `0.2` |
+| JSON mode | `response_format.type = json_object` |
+
+Плагин отправляет в LM Studio `GenerationRequestContext`: Revit-контекст, контур, параметры генерации и полный `llm_prompt`.
+LM Studio должна вернуть в `choices[0].message.content` один JSON-объект в том же конверте результата, что описан ниже:
+
+```json
+{
+  "success": true,
+  "data": {
+    "request_id": "gen_456",
+    "status": "completed",
+    "variants": []
+  },
+  "error": null
+}
+```
+
+Если локальная модель возвращает markdown-блок или reasoning-префикс, клиент извлекает первый JSON-объект, затем строго валидирует его через DTO-контракт. Ответ без JSON, с невалидным JSON или с нарушением схемы не применяется к Revit-модели.
+
+Backend `ExternalApi` использует REST-эндпоинты `/health`, `/contours`, `/contours/{id}`, `/generate`. Backend `Mock` оставлен только для тестов и демонстраций.
+
 ## Конверт ответа
 
 Все ответы оборачиваются в единый конверт:
@@ -124,6 +155,8 @@
 | `line` | Отрезок | `start`, `end` |
 | `arc` | Дуга | `start`, `end`, `center`, `radius`, `clockwise` |
 | `spline` | Сплайн | `start`, `end`, `control_points[]` |
+| `ellipse` | Эллиптический сегмент | `start`, `end` |
+| `nurbs_spline` | NURBS-сплайн | `start`, `end`, `control_points[]` |
 
 **Единицы (`unit`):** `mm`, `cm`, `m`, `ft`, `in`
 
@@ -137,16 +170,86 @@
 
 ```json
 {
+  "request_id": "gen_req_20260519_001",
   "contour_id": "abc123",
   "variant_count": 3,
-  "room_types": ["LivingRoom", "Bedroom", "Kitchen", "Bathroom", "Corridor"],
-  "min_room_area": 8.0,
-  "max_room_area": 80.0,
+  "generation_type": "Residential",
+  "validation_mode": "Advisory",
+  "text_prompt": "Сделать компактные МОП и сохранить хорошую инсоляцию квартир.",
+  "llm_prompt": "Сгенерируй варианты планировочного решения для Revit...",
+  "apartment_types": {
+    "Studio": 2,
+    "OneRoom": 4,
+    "TwoRoom": 6,
+    "ThreeRoom": 2
+  },
+  "min_apartment_area": 25.0,
+  "max_apartment_area": 120.0,
+  "mop_area_target": 80.0,
   "min_corridor_width": 1.2,
   "optimization_priority": "efficiency",
-  "custom_parameters": {}
+  "room_types": ["LivingRoom", "Bedroom", "Kitchen", "Bathroom", "CommonArea", "Lobby", "Elevator"],
+  "min_room_area": 8.0,
+  "max_room_area": 80.0,
+  "custom_parameters": {},
+  "context": {
+    "contour": {
+      "id": "abc123",
+      "name": "Этаж 1 — корпус A",
+      "unit": "m",
+      "outer_loop": [
+        { "type": "line", "start": { "x": 0.0, "y": 0.0 }, "end": { "x": 30.0, "y": 0.0 } }
+      ],
+      "inner_loops": [],
+      "metadata": {
+        "source": "revit_selection"
+      }
+    },
+    "revit_context": {
+      "document_title": "Project.rvt",
+      "active_view_name": "Level 1",
+      "active_view_type": "FloorPlan",
+      "level_id": "311",
+      "level_name": "Level 1",
+      "level_elevation_meters": 0.0,
+      "contour_source": "revit_selection",
+      "project_parameters": {
+        "project_name": "Residential building",
+        "contour_area_m2": "600.00"
+      },
+      "existing_elements": [
+        {
+          "element_id": "5021",
+          "category": "Walls",
+          "name": "Basic Wall",
+          "element_type": "Generic - 200mm",
+          "level_name": "Level 1",
+          "parameters": {
+            "Length": "12000"
+          }
+        }
+      ]
+    }
+  }
 }
 ```
+
+**Поля генерации:**
+
+| Поле | Описание |
+|------|----------|
+| `request_id` | Идентификатор запроса, сформированный плагином для корреляции логов и ответа. |
+| `contour_id` | Идентификатор контура. Сохраняется для обратной совместимости. |
+| `variant_count` | Количество вариантов, 1-20. |
+| `generation_type` | Тип сценария: `Residential`, `Office`, `MixedUse`, `Custom`. |
+| `validation_mode` | Режим проверки: `Off`, `Advisory`, `Strict`. |
+| `text_prompt` | Пользовательский текстовый промпт. |
+| `llm_prompt` | Полный prompt, собранный плагином из параметров и Revit-контекста. Пользовательский текст внутри него трактуется как данные, а не как инструкция менять контракт ответа. |
+| `apartment_types` | Квартирография: тип квартиры -> количество. |
+| `mop_area_target` | Целевая площадь МОП, м². Если отсутствует, сервис выбирает автоматически. |
+| `min_corridor_width` | Минимальная ширина коридоров МОП, м. |
+| `context.contour` | Полная геометрия контура в метрах. |
+| `context.revit_context` | Уровень, активный вид, параметры проекта и существующие элементы модели. |
 
 **Ответ:**
 
@@ -160,7 +263,7 @@
       {
         "id": "var_001",
         "name": "Вариант 1",
-        "variant_index": 0,
+        "variant_index": 1,
         "rooms": [
           {
             "id": "room_001",
@@ -182,7 +285,13 @@
         ],
         "total_area": 600.0,
         "usable_area": 520.0,
+        "mop_area": 72.0,
         "room_count": 8,
+        "apartment_count": 6,
+        "apartment_type_distribution": {
+          "OneRoom": 2,
+          "TwoRoom": 4
+        },
         "corridor_area": 80.0,
         "efficiency_score": 87.0,
         "custom_metrics": {},
@@ -193,9 +302,17 @@
 }
 ```
 
+Ответ `/generate` должен содержать ровно столько элементов `data.variants`, сколько было передано в `variant_count`.
+Плагин до маппинга в доменную модель проверяет обязательные поля `request_id`, `status`, `variants`, `variant.id`,
+`variant.name`, положительные площади, список помещений, `room.id`, `room.name`, `room.type`, `room.area`,
+`room.boundary`, `room.label_point` и корректность числовых координат. Ответ с текстом вместо JSON, пустым телом,
+невалидным JSON или нарушением этого контракта не применяется к Revit-модели.
+
 **Типы помещений (`room_types`):**
 
-`LivingRoom`, `Bedroom`, `Kitchen`, `Bathroom`, `Corridor`, `Storage`, `Office`, `MeetingRoom`, `OpenSpace`, `Lobby`, `Technical`, `Staircase`, `Elevator`, `Balcony`, `Other`
+`LivingRoom`, `Bedroom`, `Kitchen`, `Bathroom`, `Corridor`, `Storage`, `Office`, `MeetingRoom`, `OpenSpace`, `Lobby`, `Technical`, `Staircase`, `Elevator`, `Balcony`, `CommonArea`, `Other`
+
+`CommonArea`, `Lobby`, `Elevator`, `Staircase` и общие коридоры трактуются как МОП (места общего пользования).
 
 **Приоритеты оптимизации:**
 
@@ -218,6 +335,9 @@
 | 429 | `RATE_LIMIT` | Превышен лимит запросов |
 | 500 | `INTERNAL_ERROR` | Внутренняя ошибка сервера |
 | 500 | `GENERATION_ERROR` | Ошибка процесса генерации |
+| — | `EMPTY_RESPONSE` | API вернул пустое тело ответа |
+| — | `INVALID_JSON` | API вернул невалидный JSON |
+| — | `INVALID_API_CONTRACT` | JSON не соответствует обязательной DTO-схеме плагина |
 
 ---
 
@@ -228,3 +348,5 @@
 - Все `boundary` помещений также замкнуты.
 - `label_point` — точка для размещения подписи (должна находиться внутри контура помещения).
 - `efficiency_score` — нормализованный балл 0–100.
+- Координаты и площади передаются в метрах.
+- Результат LLM применяется только после строгого парсинга, валидации геометрии, UI-предпросмотра и подтверждения пользователя.

@@ -55,8 +55,14 @@ namespace RevitPlanningPlugin.Models.Api
 
     public class ApiGenerationRequestDto
     {
+        [JsonProperty("request_id")] public string? RequestId { get; set; }
         [JsonProperty("contour_id")] public string ContourId { get; set; } = string.Empty;
         [JsonProperty("variant_count")] public int VariantCount { get; set; } = 3;
+        [JsonProperty("generation_type")] public string? GenerationType { get; set; }
+        [JsonProperty("validation_mode")] public string? ValidationMode { get; set; }
+        [JsonProperty("text_prompt")] public string? TextPrompt { get; set; }
+        [JsonProperty("llm_prompt")] public string? LlmPrompt { get; set; }
+        [JsonProperty("context")] public ApiGenerationContextDto? Context { get; set; }
 
         // ——— Параметры квартир ———
 
@@ -84,6 +90,35 @@ namespace RevitPlanningPlugin.Models.Api
         [JsonProperty("max_room_area")] public double? MaxRoomArea { get; set; }
         [JsonProperty("optimization_priority")] public string? OptimizationPriority { get; set; }
         [JsonProperty("custom_parameters")] public Dictionary<string, string>? CustomParameters { get; set; }
+    }
+
+    public class ApiGenerationContextDto
+    {
+        [JsonProperty("contour")] public ApiContourDto? Contour { get; set; }
+        [JsonProperty("revit_context")] public ApiRevitProjectContextDto? RevitContext { get; set; }
+    }
+
+    public class ApiRevitProjectContextDto
+    {
+        [JsonProperty("document_title")] public string DocumentTitle { get; set; } = string.Empty;
+        [JsonProperty("active_view_name")] public string ActiveViewName { get; set; } = string.Empty;
+        [JsonProperty("active_view_type")] public string ActiveViewType { get; set; } = string.Empty;
+        [JsonProperty("level_id")] public string LevelId { get; set; } = string.Empty;
+        [JsonProperty("level_name")] public string LevelName { get; set; } = string.Empty;
+        [JsonProperty("level_elevation_meters")] public double LevelElevationMeters { get; set; }
+        [JsonProperty("contour_source")] public string ContourSource { get; set; } = string.Empty;
+        [JsonProperty("project_parameters")] public Dictionary<string, string> ProjectParameters { get; set; } = new();
+        [JsonProperty("existing_elements")] public List<ApiRevitElementContextDto> ExistingElements { get; set; } = new();
+    }
+
+    public class ApiRevitElementContextDto
+    {
+        [JsonProperty("element_id")] public string ElementId { get; set; } = string.Empty;
+        [JsonProperty("category")] public string Category { get; set; } = string.Empty;
+        [JsonProperty("name")] public string Name { get; set; } = string.Empty;
+        [JsonProperty("element_type")] public string ElementType { get; set; } = string.Empty;
+        [JsonProperty("level_name")] public string? LevelName { get; set; }
+        [JsonProperty("parameters")] public Dictionary<string, string> Parameters { get; set; } = new();
     }
 
     public class ApiRoomDto
@@ -154,5 +189,60 @@ namespace RevitPlanningPlugin.Models.Api
     {
         [JsonProperty("code")] public string Code { get; set; } = string.Empty;
         [JsonProperty("message")] public string Message { get; set; } = string.Empty;
+    }
+
+    // ——————————————————————————————————————————————
+    //  OpenAI-compatible DTO для локальной LM Studio
+    // ——————————————————————————————————————————————
+
+    public class LmStudioChatRequestDto
+    {
+        [JsonProperty("model")] public string Model { get; set; } = string.Empty;
+        [JsonProperty("messages")] public List<LmStudioChatMessageDto> Messages { get; set; } = new();
+        [JsonProperty("temperature")] public double Temperature { get; set; } = 0.2;
+        [JsonProperty("max_tokens")] public int MaxTokens { get; set; } = 8192;
+        [JsonProperty("stream")] public bool Stream { get; set; }
+        [JsonProperty("response_format", NullValueHandling = NullValueHandling.Ignore)]
+        public LmStudioResponseFormatDto? ResponseFormat { get; set; } = new();
+    }
+
+    public class LmStudioResponseFormatDto
+    {
+        [JsonProperty("type")] public string Type { get; set; } = "json_object";
+    }
+
+    public class LmStudioChatMessageDto
+    {
+        [JsonProperty("role")] public string Role { get; set; } = string.Empty;
+        [JsonProperty("content")] public string Content { get; set; } = string.Empty;
+    }
+
+    public class LmStudioChatResponseDto
+    {
+        [JsonProperty("choices")] public List<LmStudioChoiceDto> Choices { get; set; } = new();
+        [JsonProperty("error")] public LmStudioErrorDto? Error { get; set; }
+    }
+
+    public class LmStudioChoiceDto
+    {
+        [JsonProperty("message")] public LmStudioChatMessageDto? Message { get; set; }
+        [JsonProperty("finish_reason")] public string? FinishReason { get; set; }
+    }
+
+    public class LmStudioErrorDto
+    {
+        [JsonProperty("message")] public string Message { get; set; } = string.Empty;
+        [JsonProperty("type")] public string? Type { get; set; }
+        [JsonProperty("code")] public string? Code { get; set; }
+    }
+
+    public class LmStudioModelsResponseDto
+    {
+        [JsonProperty("data")] public List<LmStudioModelDto> Data { get; set; } = new();
+    }
+
+    public class LmStudioModelDto
+    {
+        [JsonProperty("id")] public string Id { get; set; } = string.Empty;
     }
 }

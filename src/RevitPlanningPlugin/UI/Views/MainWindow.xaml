@@ -31,6 +31,34 @@
             </ObjectDataProvider.MethodParameters>
         </ObjectDataProvider>
 
+        <ObjectDataProvider x:Key="GenerationBackendValues" MethodName="GetValues"
+                            ObjectType="{x:Type sys:Enum}">
+            <ObjectDataProvider.MethodParameters>
+                <x:Type TypeName="enums:GenerationBackend"/>
+            </ObjectDataProvider.MethodParameters>
+        </ObjectDataProvider>
+
+        <ObjectDataProvider x:Key="GenerationTypeValues" MethodName="GetValues"
+                            ObjectType="{x:Type sys:Enum}">
+            <ObjectDataProvider.MethodParameters>
+                <x:Type TypeName="enums:GenerationType"/>
+            </ObjectDataProvider.MethodParameters>
+        </ObjectDataProvider>
+
+        <ObjectDataProvider x:Key="ValidationModeValues" MethodName="GetValues"
+                            ObjectType="{x:Type sys:Enum}">
+            <ObjectDataProvider.MethodParameters>
+                <x:Type TypeName="enums:ValidationMode"/>
+            </ObjectDataProvider.MethodParameters>
+        </ObjectDataProvider>
+
+        <ObjectDataProvider x:Key="MockScenarioValues" MethodName="GetValues"
+                            ObjectType="{x:Type sys:Enum}">
+            <ObjectDataProvider.MethodParameters>
+                <x:Type TypeName="enums:MockScenario"/>
+            </ObjectDataProvider.MethodParameters>
+        </ObjectDataProvider>
+
         <!-- ── Общие стили ── -->
         <Style x:Key="SectionHeader" TargetType="TextBlock">
             <Setter Property="FontSize"     Value="13"/>
@@ -203,45 +231,64 @@
                                     <Grid.RowDefinitions>
                                         <RowDefinition/><RowDefinition/><RowDefinition/>
                                         <RowDefinition/><RowDefinition/><RowDefinition/>
+                                        <RowDefinition/><RowDefinition/><RowDefinition/>
                                     </Grid.RowDefinitions>
 
-                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Base URL:"
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Backend:"
                                                VerticalAlignment="Center" Margin="0,4"/>
-                                    <TextBox   Grid.Row="0" Grid.Column="1"
+                                    <ComboBox  Grid.Row="0" Grid.Column="1"
+                                               SelectedItem="{Binding Settings.Backend}"
+                                               ItemsSource="{Binding Source={StaticResource GenerationBackendValues}}"
+                                               Margin="4"/>
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="LM Studio URL:"
+                                               VerticalAlignment="Center" Margin="0,4"/>
+                                    <TextBox   Grid.Row="1" Grid.Column="1"
+                                               Text="{Binding Settings.LmStudioBaseUrl, UpdateSourceTrigger=PropertyChanged}"
+                                               Margin="4"/>
+
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="LM Studio model:"
+                                               VerticalAlignment="Center" Margin="0,4"/>
+                                    <TextBox   Grid.Row="2" Grid.Column="1"
+                                               Text="{Binding Settings.LmStudioModel, UpdateSourceTrigger=PropertyChanged}"
+                                               Margin="4"/>
+
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="External API URL:"
+                                               VerticalAlignment="Center" Margin="0,4"/>
+                                    <TextBox   Grid.Row="3" Grid.Column="1"
                                                Text="{Binding Settings.BaseUrl, UpdateSourceTrigger=PropertyChanged}"
                                                Margin="4"/>
 
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Окружение:"
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Окружение:"
                                                VerticalAlignment="Center" Margin="0,4"/>
-                                    <ComboBox  Grid.Row="1" Grid.Column="1"
+                                    <ComboBox  Grid.Row="4" Grid.Column="1"
                                                SelectedItem="{Binding Settings.Environment}"
                                                ItemsSource="{Binding Source={StaticResource ApiEnvironmentValues}}"
                                                Margin="4"/>
 
-                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="API Key:"
+                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="API Key:"
                                                VerticalAlignment="Center" Margin="0,4"/>
                                     <!-- PasswordBox: обновление через code-behind (PasswordChanged) -->
-                                    <PasswordBox x:Name="ApiKeyBox" Grid.Row="2" Grid.Column="1"
+                                    <PasswordBox x:Name="ApiKeyBox" Grid.Row="5" Grid.Column="1"
                                                  Margin="4" PasswordChanged="ApiKeyBox_PasswordChanged"/>
 
-                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Bearer Token:"
+                                    <TextBlock Grid.Row="6" Grid.Column="0" Text="Bearer Token:"
                                                VerticalAlignment="Center" Margin="0,4"/>
-                                    <PasswordBox x:Name="BearerTokenBox" Grid.Row="3" Grid.Column="1"
+                                    <PasswordBox x:Name="BearerTokenBox" Grid.Row="6" Grid.Column="1"
                                                  Margin="4" PasswordChanged="BearerTokenBox_PasswordChanged"/>
 
-                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Таймаут (сек):"
+                                    <TextBlock Grid.Row="7" Grid.Column="0" Text="Таймаут (сек):"
                                                VerticalAlignment="Center" Margin="0,4"/>
-                                    <TextBox   Grid.Row="4" Grid.Column="1"
+                                    <TextBox   Grid.Row="7" Grid.Column="1"
                                                Text="{Binding Settings.RequestTimeoutSeconds}"
                                                Style="{StaticResource NumericBox}" Margin="4,2"/>
 
-                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Режим Mock API:"
-                                               VerticalAlignment="Center" Margin="0,4"
-                                               ToolTip="Работа без реального сервера — для разработки и тестирования"/>
-                                    <CheckBox  Grid.Row="5" Grid.Column="1"
-                                               IsChecked="{Binding Settings.UseMockApi}"
-                                               Content="Использовать Mock-клиент (без реального API)"
-                                               VerticalAlignment="Center" Margin="4"/>
+                                    <TextBlock Grid.Row="8" Grid.Column="0" Text="Mock-сценарий:"
+                                               VerticalAlignment="Center" Margin="0,4"/>
+                                    <ComboBox  Grid.Row="8" Grid.Column="1"
+                                               SelectedItem="{Binding Settings.MockScenario}"
+                                               ItemsSource="{Binding Source={StaticResource MockScenarioValues}}"
+                                               Margin="4"/>
                                 </Grid>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
@@ -252,7 +299,7 @@
                                 </StackPanel>
 
                                 <TextBlock Foreground="#888" FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap"
-                                           Text="Секреты (API Key, Token) хранятся в зашифрованном виде (DPAPI). Включите Mock API для работы без реального сервера."/>
+                                           Text="Production-режим: Backend = LmStudio, URL обычно http://localhost:1234/v1, model должен совпадать с именем загруженной в LM Studio модели. Секреты хранятся через DPAPI."/>
                             </StackPanel>
                         </Border>
                     </StackPanel>
@@ -271,9 +318,25 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <Button Grid.Row="0" Content="Загрузить список контуров из API"
-                            Style="{StaticResource ActionButton}" HorizontalAlignment="Left"
-                            Command="{Binding LoadContoursCommand}"/>
+                    <StackPanel Grid.Row="0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Уровень:" VerticalAlignment="Center" Margin="4,0,8,0"/>
+                            <ComboBox ItemsSource="{Binding AvailableLevels}"
+                                      SelectedItem="{Binding SelectedLevel}"
+                                      Width="220" Margin="0,0,12,0"/>
+                            <TextBlock Text="{Binding SelectedLevelInfo}" Foreground="#888"
+                                       FontSize="11" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                            <Button Content="Загрузить список контуров из API"
+                                    Style="{StaticResource ActionButton}" HorizontalAlignment="Left"
+                                    Command="{Binding LoadContoursCommand}"/>
+                            <Button Content="Извлечь контур из выделения Revit"
+                                    Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"
+                                    Command="{Binding ExtractSelectedContourCommand}"
+                                    ToolTip="Выделите замкнутые линии, разделители помещений или стены на активном уровне"/>
+                        </StackPanel>
+                    </StackPanel>
 
                     <ListBox Grid.Row="1" Margin="0,8"
                              ItemsSource="{Binding AvailableContours}"
@@ -333,22 +396,38 @@
                                     </Grid.ColumnDefinitions>
                                     <Grid.RowDefinitions>
                                         <RowDefinition/><RowDefinition/><RowDefinition/>
+                                        <RowDefinition/><RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
 
-                                    <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center">
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Тип генерации:"
+                                               VerticalAlignment="Center"/>
+                                    <ComboBox Grid.Row="0" Grid.Column="1" Margin="4"
+                                              Width="180" HorizontalAlignment="Left"
+                                              SelectedItem="{Binding GenerationParams.GenerationType}"
+                                              ItemsSource="{Binding Source={StaticResource GenerationTypeValues}}"/>
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0" VerticalAlignment="Center">
                                         <Run Text="Количество вариантов: "/>
                                         <Run Text="{Binding GenerationParams.VariantCount, Mode=OneWay}"
                                              FontWeight="Bold"/>
                                     </TextBlock>
-                                    <Slider Grid.Row="0" Grid.Column="1"
+                                    <Slider Grid.Row="1" Grid.Column="1"
                                             Minimum="1" Maximum="20"
                                             Value="{Binding GenerationParams.VariantCount}"
                                             IsSnapToTickEnabled="True" TickFrequency="1"
                                             TickPlacement="BottomRight" Margin="4,8"/>
 
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Приоритет оптимизации:"
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Режим проверки:"
                                                VerticalAlignment="Center"/>
-                                    <ComboBox Grid.Row="1" Grid.Column="1" Margin="4"
+                                    <ComboBox Grid.Row="2" Grid.Column="1" Margin="4"
+                                              Width="180" HorizontalAlignment="Left"
+                                              SelectedItem="{Binding GenerationParams.ValidationMode}"
+                                              ItemsSource="{Binding Source={StaticResource ValidationModeValues}}"/>
+
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Приоритет оптимизации:"
+                                               VerticalAlignment="Center"/>
+                                    <ComboBox Grid.Row="3" Grid.Column="1" Margin="4"
                                               Width="160" HorizontalAlignment="Left"
                                               SelectedValue="{Binding GenerationParams.OptimizationPriority}"
                                               SelectedValuePath="Content">
@@ -356,6 +435,25 @@
                                         <ComboBoxItem Content="area"/>
                                         <ComboBoxItem Content="rooms"/>
                                     </ComboBox>
+
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Текстовый prompt:"
+                                               VerticalAlignment="Top" Margin="0,8,0,0"/>
+                                    <TextBox Grid.Row="4" Grid.Column="1" Margin="4,8,4,0"
+                                             Text="{Binding GenerationParams.TextPrompt, UpdateSourceTrigger=PropertyChanged}"
+                                             AcceptsReturn="True"
+                                             TextWrapping="Wrap"
+                                             MinHeight="72"
+                                             VerticalScrollBarVisibility="Auto"/>
+
+                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Состав помещений:"
+                                               VerticalAlignment="Top" Margin="0,8,0,0"/>
+                                    <TextBox Grid.Row="5" Grid.Column="1" Margin="4,8,4,0"
+                                             Text="{Binding RequiredRoomTypesText, UpdateSourceTrigger=PropertyChanged}"
+                                             AcceptsReturn="True"
+                                             TextWrapping="Wrap"
+                                             MinHeight="48"
+                                             VerticalScrollBarVisibility="Auto"
+                                             ToolTip="Введите типы через запятую, например: LivingRoom, Bedroom, Kitchen, CommonArea"/>
                                 </Grid>
                             </StackPanel>
                         </Border>
@@ -478,8 +576,12 @@
                                     FontSize="14" Padding="24,10"/>
                             <TextBlock Foreground="#888" FontSize="11" Margin="4,6,0,0"
                                        Text="При повторном запуске новые варианты заменяют предыдущие."/>
-                            <TextBlock Text="{Binding GenerationHistoryInfo}"
-                                       Foreground="#1565C0" FontSize="11" Margin="4,2,0,0"/>
+	                            <TextBlock Text="{Binding GenerationHistoryInfo}"
+	                                       Foreground="#1565C0" FontSize="11" Margin="4,2,0,0"/>
+	                            <TextBlock Text="{Binding GenerationValidationMessages}"
+	                                       Foreground="#E65100" FontSize="11" Margin="4,6,0,0"
+	                                       TextWrapping="Wrap"
+	                                       Visibility="{Binding HasGenerationValidationMessages, Converter={StaticResource BoolToVisibility}}"/>
                         </StackPanel>
 
                     </StackPanel>
@@ -615,28 +717,80 @@
                                 <!-- Метрики: основные -->
                                 <Border DockPanel.Dock="Top" Background="#F8F9FA"
                                         CornerRadius="4" Padding="8" Margin="0,0,0,8">
-                                    <StackPanel>
-                                        <TextBlock Text="{Binding VariantInfo}"
-                                                   TextWrapping="Wrap" FontSize="12"/>
+	                                    <StackPanel>
+	                                        <TextBlock Text="{Binding VariantInfo}"
+	                                                   TextWrapping="Wrap" FontSize="12"/>
+	                                        <TextBlock Text="{Binding GenerationValidationMessages}"
+	                                                   TextWrapping="Wrap" FontSize="11"
+	                                                   Foreground="#E65100" Margin="0,6,0,0"
+	                                                   Visibility="{Binding HasGenerationValidationMessages, Converter={StaticResource BoolToVisibility}}"/>
 
-                                        <!-- Распределение квартир по типам -->
+	                                        <!-- Распределение квартир по типам -->
                                         <TextBlock Margin="0,6,0,0" FontSize="12" FontWeight="SemiBold"
                                                    Text="Состав квартир:"
                                                    Visibility="{Binding HasApartmentTypeInfo, Converter={StaticResource BoolToVisibility}}"/>
-                                        <TextBlock Text="{Binding VariantApartmentTypeSummary}"
-                                                   FontSize="12" Foreground="#1565C0" Margin="0,2,0,0"
-                                                   Visibility="{Binding HasApartmentTypeInfo, Converter={StaticResource BoolToVisibility}}"/>
-                                    </StackPanel>
-                                </Border>
+	                                        <TextBlock Text="{Binding VariantApartmentTypeSummary}"
+	                                                   FontSize="12" Foreground="#1565C0" Margin="0,2,0,0"
+	                                                   Visibility="{Binding HasApartmentTypeInfo, Converter={StaticResource BoolToVisibility}}"/>
+	                                    </StackPanel>
+	                                </Border>
 
-                                <!-- Кнопки применения -->
-                                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,10,0,0">
-                                    <Button Content="Применить (разделители + помещения)"
+	                                <!-- Геометрический preview выбранного варианта -->
+	                                <Border DockPanel.Dock="Top" Background="#FFFFFF"
+	                                        BorderBrush="#E0E0E0" BorderThickness="1"
+	                                        CornerRadius="4" Padding="8" Margin="0,0,0,8"
+	                                        Visibility="{Binding HasPreview, Converter={StaticResource BoolToVisibility}}">
+	                                    <StackPanel>
+	                                        <TextBlock Style="{StaticResource SubHeader}" Text="Предпросмотр:"/>
+	                                        <Canvas Width="{Binding PreviewCanvasWidth}"
+	                                                Height="{Binding PreviewCanvasHeight}"
+	                                                Background="#FAFAFA"
+	                                                ClipToBounds="True">
+	                                            <ItemsControl ItemsSource="{Binding PreviewRooms}">
+	                                                <ItemsControl.ItemsPanel>
+	                                                    <ItemsPanelTemplate>
+	                                                        <Canvas/>
+	                                                    </ItemsPanelTemplate>
+	                                                </ItemsControl.ItemsPanel>
+	                                                <ItemsControl.ItemTemplate>
+	                                                    <DataTemplate>
+	                                                        <Polygon Points="{Binding Points}"
+	                                                                 Fill="{Binding Fill}"
+	                                                                 Stroke="{Binding Stroke}"
+	                                                                 StrokeThickness="1"
+	                                                                 Opacity="0.82"
+	                                                                 ToolTip="{Binding Label}"/>
+	                                                    </DataTemplate>
+	                                                </ItemsControl.ItemTemplate>
+	                                            </ItemsControl>
+	                                            <ItemsControl ItemsSource="{Binding PreviewInnerContourPoints}">
+	                                                <ItemsControl.ItemsPanel>
+	                                                    <ItemsPanelTemplate>
+	                                                        <Canvas/>
+	                                                    </ItemsPanelTemplate>
+	                                                </ItemsControl.ItemsPanel>
+	                                                <ItemsControl.ItemTemplate>
+	                                                    <DataTemplate>
+	                                                        <Polygon Points="{Binding}"
+	                                                                 Fill="#FAFAFA"
+	                                                                 Stroke="#222"
+	                                                                 StrokeThickness="1.5"/>
+	                                                    </DataTemplate>
+	                                                </ItemsControl.ItemTemplate>
+	                                            </ItemsControl>
+	                                            <Polygon Points="{Binding PreviewContourPoints}"
+	                                                     Fill="Transparent"
+	                                                     Stroke="#222"
+	                                                     StrokeThickness="2"/>
+	                                        </Canvas>
+	                                    </StackPanel>
+	                                </Border>
+
+	                                <!-- Кнопка черновой записи -->
+	                                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,10,0,0">
+                                    <Button Content="Создать черновик в Revit (разделители + помещения)"
                                             Style="{StaticResource SuccessButton}"
                                             Command="{Binding ApplyVariantCommand}"/>
-                                    <Button Content="Применить со стенами"
-                                            Style="{StaticResource ActionButton}"
-                                            Command="{Binding ApplyWithWallsCommand}"/>
                                 </StackPanel>
 
                                 <!-- Список помещений -->

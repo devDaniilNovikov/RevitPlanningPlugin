@@ -36,5 +36,8 @@ namespace RevitPlanningPlugin.Models.Domain
 
         public void AddWarning(string message, string? code = null)
             => Issues.Add(new ValidationIssue { Severity = ValidationSeverity.Warning, Message = message, Code = code });
+
+        public void AddInfo(string message, string? code = null)
+            => Issues.Add(new ValidationIssue { Severity = ValidationSeverity.Info, Message = message, Code = code });
     }
 }

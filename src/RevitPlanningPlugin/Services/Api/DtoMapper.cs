@@ -63,6 +63,9 @@ namespace RevitPlanningPlugin.Services.Api
             {
                 ContourId = contourId,
                 VariantCount = parameters.VariantCount,
+                GenerationType = parameters.GenerationType.ToString(),
+                ValidationMode = parameters.ValidationMode.ToString(),
+                TextPrompt = string.IsNullOrWhiteSpace(parameters.TextPrompt) ? null : parameters.TextPrompt,
 
                 // Квартиры
                 ApartmentTypes = parameters.GetApartmentTypeRequirements(),
@@ -94,6 +97,19 @@ namespace RevitPlanningPlugin.Services.Api
             return dto;
         }
 
+        public static ApiGenerationRequestDto ToDto(GenerationRequestContext context)
+        {
+            var dto = ToDto(context.Contour.Id, context.Parameters);
+            dto.RequestId = string.IsNullOrWhiteSpace(context.RequestId) ? null : context.RequestId;
+            dto.LlmPrompt = string.IsNullOrWhiteSpace(context.Prompt) ? null : context.Prompt;
+            dto.Context = new ApiGenerationContextDto
+            {
+                Contour = ToApiDto(context.Contour),
+                RevitContext = ToApiDto(context.ProjectContext)
+            };
+            return dto;
+        }
+
         // ————— Helpers —————
 
         private static ContourSegment MapSegment(ApiSegmentDto dto)
@@ -117,6 +133,80 @@ namespace RevitPlanningPlugin.Services.Api
                 ArcClockwise = dto.Clockwise ?? false,
                 SplineControlPoints = dto.ControlPoints?
                     .Select(p => new Point2D(p.X, p.Y)).ToList()
+            };
+        }
+
+        private static ApiContourDto ToApiDto(BuildingContour contour)
+        {
+            return new ApiContourDto
+            {
+                Id = contour.Id,
+                Name = contour.Name,
+                Description = contour.Description,
+                Unit = "m",
+                OuterLoop = contour.OuterLoop.Select(ToApiDto).ToList(),
+                InnerLoops = contour.InnerLoops.Select(loop => loop.Select(ToApiDto).ToList()).ToList(),
+                Metadata = contour.Metadata
+            };
+        }
+
+        private static ApiSegmentDto ToApiDto(ContourSegment segment)
+        {
+            return new ApiSegmentDto
+            {
+                Type = ToApiSegmentType(segment.Type),
+                Start = ToApiDto(segment.Start),
+                End = ToApiDto(segment.End),
+                Center = segment.ArcCenter != null ? ToApiDto(segment.ArcCenter) : null,
+                Radius = segment.ArcRadius,
+                Clockwise = segment.ArcClockwise,
+                ControlPoints = segment.SplineControlPoints?.Select(ToApiDto).ToList()
+            };
+        }
+
+        private static ApiPointDto ToApiDto(Point2D point)
+        {
+            return new ApiPointDto { X = point.X, Y = point.Y };
+        }
+
+        private static ApiRevitProjectContextDto ToApiDto(RevitProjectContext context)
+        {
+            return new ApiRevitProjectContextDto
+            {
+                DocumentTitle = context.DocumentTitle,
+                ActiveViewName = context.ActiveViewName,
+                ActiveViewType = context.ActiveViewType,
+                LevelId = context.LevelId,
+                LevelName = context.LevelName,
+                LevelElevationMeters = context.LevelElevationMeters,
+                ContourSource = context.ContourSource,
+                ProjectParameters = context.ProjectParameters,
+                ExistingElements = context.ExistingElements.Select(ToApiDto).ToList()
+            };
+        }
+
+        private static ApiRevitElementContextDto ToApiDto(RevitModelElementContext element)
+        {
+            return new ApiRevitElementContextDto
+            {
+                ElementId = element.ElementId,
+                Category = element.Category,
+                Name = element.Name,
+                ElementType = element.ElementType,
+                LevelName = element.LevelName,
+                Parameters = element.Parameters
+            };
+        }
+
+        private static string ToApiSegmentType(SegmentType type)
+        {
+            return type switch
+            {
+                SegmentType.Arc => "arc",
+                SegmentType.Spline => "spline",
+                SegmentType.Ellipse => "ellipse",
+                SegmentType.NurbsSpline => "nurbs_spline",
+                _ => "line"
             };
         }
 

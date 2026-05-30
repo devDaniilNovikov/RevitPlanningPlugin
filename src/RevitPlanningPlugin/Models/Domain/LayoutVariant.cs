@@ -140,8 +140,10 @@ namespace RevitPlanningPlugin.Models.Domain
         /// <summary>Список только МОП-помещений.</summary>
         public IEnumerable<RoomLayout> MopRooms =>
             Rooms.Where(r => r.Type == RoomType.CommonArea
+                          || r.Type == RoomType.Corridor
                           || r.Type == RoomType.Lobby
-                          || r.Type == RoomType.Elevator);
+                          || r.Type == RoomType.Elevator
+                          || r.Type == RoomType.Staircase);
 
         /// <summary>Список только жилых (квартирных) помещений.</summary>
         public IEnumerable<RoomLayout> ResidentialRooms =>

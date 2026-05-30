@@ -12,6 +12,13 @@ namespace RevitPlanningPlugin.Services.Configuration
     /// </summary>
     public class PluginSettings
     {
+        public const string DefaultLmStudioModel = "google/gemma-4-e4b";
+
+        public GenerationBackend Backend { get; set; } = GenerationBackend.LmStudio;
+        public string LmStudioBaseUrl { get; set; } = "http://localhost:1234/v1";
+        public string LmStudioModel { get; set; } = DefaultLmStudioModel;
+        public double LmStudioTemperature { get; set; } = 0.2;
+        public int LmStudioMaxTokens { get; set; } = 8192;
         public string BaseUrl { get; set; } = "https://api.example.com/v1";
         public ApiEnvironment Environment { get; set; } = ApiEnvironment.Development;
         public string ApiKey { get; set; } = string.Empty;
@@ -28,6 +35,17 @@ namespace RevitPlanningPlugin.Services.Configuration
         /// </summary>
         public bool UseMockApi { get; set; } = false;
 
+        /// <summary>
+        /// Сценарий поведения мок-клиента для воспроизводимой дипломной демонстрации.
+        /// </summary>
+        public MockScenario MockScenario { get; set; } = MockScenario.HappyPath;
+
+        /// <summary>
+        /// Обратная совместимость со старым флагом mock-режима.
+        /// </summary>
+        [JsonIgnore]
+        public GenerationBackend EffectiveBackend => UseMockApi ? GenerationBackend.Mock : Backend;
+
         /// <summary>Базовый URL для выбранного окружения.</summary>
         [JsonIgnore]
         public string EffectiveBaseUrl
@@ -42,6 +60,15 @@ namespace RevitPlanningPlugin.Services.Configuration
                     ApiEnvironment.Staging => "https://api-stage.planning.example.com/v1",
                     _ => "https://api-dev.planning.example.com/v1"
                 };
+            }
+        }
+
+        public void NormalizeDefaults()
+        {
+            if (string.IsNullOrWhiteSpace(LmStudioModel)
+                || string.Equals(LmStudioModel, "qwen3-7b", StringComparison.OrdinalIgnoreCase))
+            {
+                LmStudioModel = DefaultLmStudioModel;
             }
         }
     }
@@ -78,6 +105,12 @@ namespace RevitPlanningPlugin.Services.Configuration
                 // Расшифровка секретов (DPAPI, только Windows)
                 settings.ApiKey = DecryptString(settings.ApiKey);
                 settings.BearerToken = DecryptString(settings.BearerToken);
+                settings.NormalizeDefaults();
+                if (settings.UseMockApi)
+                {
+                    settings.Backend = GenerationBackend.Mock;
+                    settings.UseMockApi = false;
+                }
 
                 _cached = settings;
                 return settings;
@@ -97,6 +130,11 @@ namespace RevitPlanningPlugin.Services.Configuration
             var toSave = new PluginSettings
             {
                 BaseUrl = settings.BaseUrl,
+                Backend = settings.Backend,
+                LmStudioBaseUrl = settings.LmStudioBaseUrl,
+                LmStudioModel = settings.LmStudioModel,
+                LmStudioTemperature = settings.LmStudioTemperature,
+                LmStudioMaxTokens = settings.LmStudioMaxTokens,
                 Environment = settings.Environment,
                 ApiKey = EncryptString(settings.ApiKey),
                 BearerToken = EncryptString(settings.BearerToken),
@@ -105,7 +143,8 @@ namespace RevitPlanningPlugin.Services.Configuration
                 SourceUnit = settings.SourceUnit,
                 AutoValidateContours = settings.AutoValidateContours,
                 LogLevel = settings.LogLevel,
-                UseMockApi = settings.UseMockApi
+                UseMockApi = false,
+                MockScenario = settings.MockScenario
             };
 
             var json = JsonConvert.SerializeObject(toSave, Formatting.Indented);

@@ -30,12 +30,9 @@ namespace RevitPlanningPlugin.Services.Geometry
             ValidateArea(contour, result);
             ValidateOrientation(contour, result);
 
-            // Валидация внутренних контуров
             for (int i = 0; i < contour.InnerLoops.Count; i++)
             {
-                var inner = contour.InnerLoops[i];
-                if (inner.Count < 3)
-                    result.AddWarning($"Внутренний контур #{i + 1}: менее 3 сегментов.", "INNER_MIN_SEGMENTS");
+                ValidateInnerLoop(contour, i, result);
             }
 
             return result;
@@ -109,6 +106,62 @@ namespace RevitPlanningPlugin.Services.Geometry
                 result.AddWarning("Контур имеет обход по часовой стрелке. Рекомендуется против часовой.", "CW_ORIENTATION");
         }
 
+        private void ValidateInnerLoop(BuildingContour contour, int index, ValidationResult result)
+        {
+            var inner = contour.InnerLoops[index];
+            var prefix = $"Внутренний контур #{index + 1}";
+
+            if (inner.Count < 3)
+            {
+                result.AddError($"{prefix}: менее 3 сегментов.", "INNER_MIN_SEGMENTS");
+                return;
+            }
+
+            ValidateLoopClosure(inner, prefix, result);
+
+            var outerPolygon = contour.GetOuterVertices();
+            if (outerPolygon.Count >= 3)
+            {
+                foreach (var point in inner.Select(s => s.Start))
+                {
+                    if (!PointInPolygonOrOnBoundary(point, outerPolygon))
+                    {
+                        result.AddError($"{prefix}: точка {point} находится вне внешнего контура.", "INNER_LOOP_OUTSIDE_OUTER");
+                        break;
+                    }
+                }
+            }
+
+            var area = ComputePolygonArea(inner.Select(s => s.Start).ToList());
+            if (area < MinAreaSqM)
+                result.AddError($"{prefix}: площадь слишком мала ({area:F2} м²).", "INNER_AREA_TOO_SMALL");
+        }
+
+        private static void ValidateLoopClosure(List<ContourSegment> loop, string prefix, ValidationResult result)
+        {
+            var first = loop.First().Start;
+            var last = loop.Last().End;
+            var gap = first.DistanceTo(last);
+            if (gap > ClosureTolerance)
+                result.AddError($"{prefix} не замкнут: зазор {gap:F4} м.", "INNER_NOT_CLOSED");
+
+            for (int i = 0; i < loop.Count - 1; i++)
+            {
+                var gapBetweenSegments = loop[i].End.DistanceTo(loop[i + 1].Start);
+                if (gapBetweenSegments > ClosureTolerance)
+                {
+                    result.AddError(
+                        $"{prefix}: разрыв между сегментами #{i} и #{i + 1}: {gapBetweenSegments:F4} м.",
+                        "INNER_DISCONTINUITY");
+                }
+            }
+        }
+
+        private static double ComputePolygonArea(List<Point2D> pts)
+        {
+            return Math.Abs(ComputeSignedArea(pts));
+        }
+
         // ——— Утилиты ———
 
         private static double ComputeSignedArea(List<Point2D> pts)
@@ -140,5 +193,39 @@ namespace RevitPlanningPlugin.Services.Geometry
 
         private static double Cross(Point2D o, Point2D a, Point2D b)
             => (a.X - o.X) * (b.Y - o.Y) - (a.Y - o.Y) * (b.X - o.X);
+
+        private static bool PointInPolygonOrOnBoundary(Point2D point, List<Point2D> polygon)
+        {
+            for (int i = 0; i < polygon.Count; i++)
+            {
+                if (PointOnSegment(point, polygon[i], polygon[(i + 1) % polygon.Count]))
+                    return true;
+            }
+
+            var inside = false;
+            for (int i = 0, j = polygon.Count - 1; i < polygon.Count; j = i++)
+            {
+                var pi = polygon[i];
+                var pj = polygon[j];
+                var intersects = ((pi.Y > point.Y) != (pj.Y > point.Y))
+                                 && (point.X < (pj.X - pi.X) * (point.Y - pi.Y) / (pj.Y - pi.Y) + pi.X);
+                if (intersects)
+                    inside = !inside;
+            }
+
+            return inside;
+        }
+
+        private static bool PointOnSegment(Point2D point, Point2D a, Point2D b)
+        {
+            var cross = Math.Abs((point.Y - a.Y) * (b.X - a.X) - (point.X - a.X) * (b.Y - a.Y));
+            if (cross > ClosureTolerance) return false;
+
+            var dot = (point.X - a.X) * (b.X - a.X) + (point.Y - a.Y) * (b.Y - a.Y);
+            if (dot < -ClosureTolerance) return false;
+
+            var lengthSquared = Math.Pow(b.X - a.X, 2) + Math.Pow(b.Y - a.Y, 2);
+            return dot <= lengthSquared + ClosureTolerance;
+        }
     }
 }

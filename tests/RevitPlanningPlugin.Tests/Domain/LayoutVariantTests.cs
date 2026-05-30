@@ -39,15 +39,16 @@ namespace RevitPlanningPlugin.Tests.Domain
                     MakeRoom(RoomType.CommonArea, 20, "mop1"),
                     MakeRoom(RoomType.Lobby, 15, "lobby"),
                     MakeRoom(RoomType.Elevator, 5, "elev"),
+                    MakeRoom(RoomType.Staircase, 12, "stairs"),
+                    MakeRoom(RoomType.Corridor, 10, "corr"),
                     MakeRoom(RoomType.LivingRoom, 40, "apt1"),
-                    MakeRoom(RoomType.Corridor, 10, "corr")
                 }
             };
             var mops = v.MopRooms.ToList();
-            Assert.Equal(3, mops.Count);
+            Assert.Equal(5, mops.Count);
             Assert.All(mops, r => Assert.Contains(r.Type, new[]
             {
-                RoomType.CommonArea, RoomType.Lobby, RoomType.Elevator
+                RoomType.CommonArea, RoomType.Corridor, RoomType.Lobby, RoomType.Elevator, RoomType.Staircase
             }));
         }
 

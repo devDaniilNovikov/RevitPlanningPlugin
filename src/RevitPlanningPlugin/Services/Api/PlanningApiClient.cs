@@ -39,6 +39,7 @@ namespace RevitPlanningPlugin.Services.Api
         Task<List<ApiContourSummaryDto>> GetContourListAsync(CancellationToken ct = default);
         Task<BuildingContour> GetContourAsync(string contourId, CancellationToken ct = default);
         Task<List<LayoutVariant>> GenerateLayoutsAsync(string contourId, GenerationParameters parameters, CancellationToken ct = default);
+        Task<List<LayoutVariant>> GenerateLayoutsAsync(GenerationRequestContext context, CancellationToken ct = default);
         Task<bool> TestConnectionAsync(CancellationToken ct = default);
     }
 
@@ -81,15 +82,8 @@ namespace RevitPlanningPlugin.Services.Api
 
         public async Task<bool> TestConnectionAsync(CancellationToken ct = default)
         {
-            try
-            {
-                await SendAsync<object>(HttpMethod.Get, "/health", ct: ct);
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
+            await SendAsync<object>(HttpMethod.Get, "/health", ct: ct);
+            return true;
         }
 
         public async Task<List<ApiContourSummaryDto>> GetContourListAsync(CancellationToken ct = default)
@@ -115,6 +109,19 @@ namespace RevitPlanningPlugin.Services.Api
             string contourId, GenerationParameters parameters, CancellationToken ct = default)
         {
             var requestDto = DtoMapper.ToDto(contourId, parameters);
+            return await GenerateLayoutsCoreAsync(requestDto, ct);
+        }
+
+        public async Task<List<LayoutVariant>> GenerateLayoutsAsync(
+            GenerationRequestContext context, CancellationToken ct = default)
+        {
+            var requestDto = DtoMapper.ToDto(context);
+            return await GenerateLayoutsCoreAsync(requestDto, ct);
+        }
+
+        private async Task<List<LayoutVariant>> GenerateLayoutsCoreAsync(
+            ApiGenerationRequestDto requestDto, CancellationToken ct)
+        {
             var body = JsonConvert.SerializeObject(requestDto);
 
             var response = await SendAsync<ApiResponse<ApiGenerationResultDto>>(
@@ -127,6 +134,10 @@ namespace RevitPlanningPlugin.Services.Api
             if (response.Data.Status == "error")
                 throw new PlanningApiException(
                     response.Data.Error ?? "Ошибка генерации.", errorCode: "GENERATION_ERROR");
+
+            ApiResponseContractValidator.ValidateGenerationResult(response.Data, requestDto.VariantCount);
+            PluginLogger.Info(
+                $"AI generation response '{response.Data.RequestId}' validated: {response.Data.Variants.Count} variant(s).");
 
             return response.Data.Variants?.Select(DtoMapper.ToDomain).ToList()
                    ?? new List<LayoutVariant>();
@@ -154,7 +165,7 @@ namespace RevitPlanningPlugin.Services.Api
                 HttpResponseMessage? response = null;
                 try
                 {
-                    request = new HttpRequestMessage(method, path);
+                    request = new HttpRequestMessage(method, BuildUri(path));
                     if (jsonBody != null)
                         request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
 
@@ -211,6 +222,10 @@ namespace RevitPlanningPlugin.Services.Api
                     lastException = ex;
                     continue;
                 }
+                catch (JsonException ex)
+                {
+                    throw new PlanningApiException("Невалидный JSON от API.", errorCode: "INVALID_JSON", inner: ex);
+                }
                 catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
                 {
                     lastException = new PlanningApiException("Таймаут запроса к API.", inner: ex);
@@ -240,12 +255,17 @@ namespace RevitPlanningPlugin.Services.Api
             if (!response.Success && response.Error != null)
                 throw new PlanningApiException(
                     response.Error.Message, errorCode: response.Error.Code);
+            if (!response.Success)
+                throw new PlanningApiException("API вернул success=false без описания ошибки.", errorCode: "API_ERROR");
         }
 
         private static string TruncateBody(string? body, int maxLen = 500)
             => string.IsNullOrEmpty(body) ? "(пусто)"
                 : body.Length <= maxLen ? body
                 : body.Substring(0, maxLen) + "…";
+
+        private Uri BuildUri(string path)
+            => new Uri(_settings.EffectiveBaseUrl.TrimEnd('/') + "/" + path.TrimStart('/'));
 
         public void Dispose() => _http?.Dispose();
     }

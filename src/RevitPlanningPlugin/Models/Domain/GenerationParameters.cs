@@ -12,6 +12,15 @@ namespace RevitPlanningPlugin.Models.Domain
         /// <summary>Количество вариантов (1–20).</summary>
         public int VariantCount { get; set; } = 3;
 
+        /// <summary>Тип генерации: жилье, офис, смешанное использование или пользовательский сценарий.</summary>
+        public GenerationType GenerationType { get; set; } = GenerationType.Residential;
+
+        /// <summary>Режим проверки результата генерации.</summary>
+        public ValidationMode ValidationMode { get; set; } = ValidationMode.Advisory;
+
+        /// <summary>Текстовое пожелание пользователя к AI-генерации.</summary>
+        public string TextPrompt { get; set; } = string.Empty;
+
         // ——— Параметры квартир ———
 
         /// <summary>Требуемое количество студий.</summary>

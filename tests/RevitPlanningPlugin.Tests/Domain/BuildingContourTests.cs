@@ -67,6 +67,18 @@ namespace RevitPlanningPlugin.Tests.Domain
             Assert.Equal(0.0, contour.ApproximateArea, precision: 10);
         }
 
+        [Fact]
+        public void ApproximateArea_InnerLoop_SubtractsVoidArea()
+        {
+            var contour = MakeRect(10, 10);
+            contour.InnerLoops.Add(BuildLoop(new[] {
+                new Point2D(3, 3), new Point2D(7, 3),
+                new Point2D(7, 7), new Point2D(3, 7)
+            }));
+
+            Assert.Equal(84.0, contour.ApproximateArea, precision: 6);
+        }
+
         // ——— IsClosed ———
 
         [Fact]

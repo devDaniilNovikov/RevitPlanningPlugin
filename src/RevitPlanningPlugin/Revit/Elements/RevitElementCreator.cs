@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Architecture;
@@ -42,7 +43,11 @@ namespace RevitPlanningPlugin.Revit.Elements
                 .Where(id => doc.GetElement(id) != null)
                 .ToList();
 
-            if (toDelete.Count == 0) return 0;
+            if (toDelete.Count == 0)
+            {
+                _elementIds.Clear();
+                return 0;
+            }
 
             var collection = new List<ElementId>(toDelete);
             doc.Delete(collection);
@@ -59,85 +64,33 @@ namespace RevitPlanningPlugin.Revit.Elements
     /// </summary>
     public class RevitElementCreator
     {
-        private const string ContourLineStyleName = "PlanningPlugin_Contour";
-        private const string PartitionLineStyleName = "PlanningPlugin_Partition";
+        // Трекер оставлен для обратной совместимости и очистки старых временных элементов,
+        // но текущий preview не создает элементы Revit до подтверждения пользователя.
+        public CreatedElementsTracker ContourTracker { get; } = new();
 
-        // Трекер для предпросмотра (удаляется при переключении варианта)
+        // Трекер оставлен для обратной совместимости со старыми сессиями плагина.
         public CreatedElementsTracker PreviewTracker { get; } = new();
 
         // Трекер для окончательно примененного варианта
         public CreatedElementsTracker AppliedTracker { get; } = new();
 
         /// <summary>
-        /// Отрисовывает контур здания в Revit (Detail Lines на активном виде).
+        /// Регистрирует UI-предпросмотр контура без изменения Revit-модели.
         /// </summary>
         public void DrawContour(Document doc, View activeView, BuildingContour contour, Level level)
         {
-            SafeTransaction.Execute(doc, "Отрисовка контура", tx =>
-            {
-                var curves = RevitCurveBuilder.BuildCurves(contour.OuterLoop,
-                    level.Elevation * Services.Geometry.UnitConverter.FeetToMeters);
-
-                foreach (var curve in curves)
-                {
-                    var line = doc.Create.NewDetailCurve(activeView, curve);
-                    PreviewTracker.Track(line.Id);
-                }
-
-                // Внутренние контуры
-                foreach (var innerLoop in contour.InnerLoops)
-                {
-                    var innerCurves = RevitCurveBuilder.BuildCurves(innerLoop,
-                        level.Elevation * Services.Geometry.UnitConverter.FeetToMeters);
-                    foreach (var curve in innerCurves)
-                    {
-                        var line = doc.Create.NewDetailCurve(activeView, curve);
-                        PreviewTracker.Track(line.Id);
-                    }
-                }
-
-                PluginLogger.Info($"Контур '{contour.Name}' отрисован: {curves.Count} кривых.");
-            });
+            PluginLogger.Info(
+                $"Контур '{contour.Name}' выбран для UI-предпросмотра. Revit-модель не изменена до применения варианта.");
         }
 
         /// <summary>
-        /// Отрисовывает предпросмотр варианта планировки (перегородки как Detail Lines).
-        /// Предыдущий предпросмотр удаляется.
+        /// Регистрирует UI-предпросмотр варианта без создания постоянных элементов Revit.
         /// </summary>
         public void DrawLayoutPreview(Document doc, View activeView, LayoutVariant variant, Level level)
         {
-            SafeTransaction.Execute(doc, "Предпросмотр планировки", tx =>
-            {
-                // Удаляем предыдущий предпросмотр
-                PreviewTracker.DeleteAll(doc);
-
-                double elev = level.Elevation * Services.Geometry.UnitConverter.FeetToMeters;
-
-                // Рисуем перегородки
-                foreach (var partition in variant.Partitions)
-                {
-                    var curve = RevitCurveBuilder.BuildCurve(partition, elev);
-                    if (curve != null)
-                    {
-                        var line = doc.Create.NewDetailCurve(activeView, curve);
-                        PreviewTracker.Track(line.Id);
-                    }
-                }
-
-                // Рисуем границы помещений
-                foreach (var room in variant.Rooms)
-                {
-                    var roomCurves = RevitCurveBuilder.BuildCurves(room.Boundary, elev);
-                    foreach (var curve in roomCurves)
-                    {
-                        var line = doc.Create.NewDetailCurve(activeView, curve);
-                        PreviewTracker.Track(line.Id);
-                    }
-                }
-
-                PluginLogger.Info($"Предпросмотр варианта '{variant.Name}': " +
-                    $"{variant.Partitions.Count} перегородок, {variant.Rooms.Count} помещений.");
-            });
+            PluginLogger.Info(
+                $"Вариант '{variant.Name}' выбран для UI-предпросмотра: " +
+                $"{variant.Partitions.Count} перегородок, {variant.Rooms.Count} помещений. Revit-модель не изменена.");
         }
 
         /// <summary>
@@ -170,81 +123,65 @@ namespace RevitPlanningPlugin.Revit.Elements
             });
         }
 
-        /// <summary>
-        /// Применяет вариант со стенами (опционально).
-        /// </summary>
-        public void ApplyLayoutWithWalls(Document doc, LayoutVariant variant, Level level, WallType wallType, double wallHeight = 3.0)
-        {
-            SafeTransaction.ExecuteGroup(doc, $"Применение варианта со стенами '{variant.Name}'", () =>
-            {
-                SafeTransaction.Execute(doc, "Очистка", tx =>
-                {
-                    AppliedTracker.DeleteAll(doc);
-                    PreviewTracker.DeleteAll(doc);
-                });
-
-                SafeTransaction.Execute(doc, "Создание стен", tx =>
-                {
-                    CreateWalls(doc, variant, level, wallType, wallHeight);
-                });
-
-                SafeTransaction.Execute(doc, "Создание помещений", tx =>
-                {
-                    CreateRooms(doc, variant, level);
-                });
-            });
-        }
-
         // ——— Приватные методы ———
 
         private void CreateRoomSeparators(Document doc, LayoutVariant variant, Level level)
         {
             var sketchPlane = GetSketchPlane(doc, level);
+            var targetView = GetTargetPlanView(doc, level);
+            var elevationMeters = level.Elevation * Services.Geometry.UnitConverter.FeetToMeters;
+            var failures = new List<string>();
 
-            foreach (var partition in variant.Partitions)
+            foreach (var partition in GetUniqueBoundarySegments(variant))
             {
-                var curve = RevitCurveBuilder.BuildCurve(partition, 0);
-                if (curve == null) continue;
+                var curve = RevitCurveBuilder.BuildCurve(partition, elevationMeters);
+                if (curve == null)
+                {
+                    failures.Add($"не удалось построить кривую {partition.Start} -> {partition.End}");
+                    continue;
+                }
 
                 var curveArray = new CurveArray();
                 curveArray.Append(curve);
 
                 var sepLines = doc.Create.NewRoomBoundaryLines(
-                    sketchPlane, curveArray, doc.ActiveView);
+                    sketchPlane, curveArray, targetView);
 
+                var createdCount = 0;
                 if (sepLines != null)
                 {
                     foreach (ModelCurve mc in sepLines)
+                    {
+                        createdCount++;
                         AppliedTracker.Track(mc.Id);
+                    }
+                }
+
+                if (createdCount == 0)
+                {
+                    failures.Add($"Revit не создал разделитель {partition.Start} -> {partition.End}");
                 }
             }
 
-            // Границы каждого помещения тоже как separation lines
-            foreach (var room in variant.Rooms)
+            if (failures.Count > 0)
             {
-                foreach (var seg in room.Boundary)
-                {
-                    var curve = RevitCurveBuilder.BuildCurve(seg, 0);
-                    if (curve == null) continue;
-
-                    var ca = new CurveArray();
-                    ca.Append(curve);
-
-                    var sepLines = doc.Create.NewRoomBoundaryLines(sketchPlane, ca, doc.ActiveView);
-                    if (sepLines != null)
-                    {
-                        foreach (ModelCurve mc in sepLines)
-                            AppliedTracker.Track(mc.Id);
-                    }
-                }
+                var message = "Не удалось создать разделители помещений: " + string.Join("; ", failures);
+                PluginLogger.Warn(message);
+                throw new InvalidOperationException(message);
             }
         }
 
         private void CreateRooms(Document doc, LayoutVariant variant, Level level)
         {
+            var failures = new List<string>();
+
             foreach (var roomLayout in variant.Rooms)
             {
-                if (roomLayout.LabelPoint == null) continue;
+                if (roomLayout.LabelPoint == null)
+                {
+                    failures.Add($"{roomLayout.Name}: не задана точка размещения");
+                    continue;
+                }
 
                 var pt = RevitCurveBuilder.ToXYZ(roomLayout.LabelPoint, 0);
                 var uv = new UV(pt.X, pt.Y);
@@ -257,34 +194,22 @@ namespace RevitPlanningPlugin.Revit.Elements
                         room.Name = roomLayout.Name;
                         AppliedTracker.Track(room.Id);
                     }
+                    else
+                    {
+                        failures.Add($"{roomLayout.Name}: Revit вернул null при создании Room");
+                    }
                 }
                 catch (Exception ex)
                 {
-                    PluginLogger.Warn($"Не удалось создать помещение '{roomLayout.Name}': {ex.Message}");
+                    failures.Add($"{roomLayout.Name}: {ex.Message}");
                 }
             }
-        }
 
-        private void CreateWalls(Document doc, LayoutVariant variant, Level level,
-            WallType wallType, double wallHeight)
-        {
-            double heightFeet = wallHeight * Services.Geometry.UnitConverter.MetersToFeet;
-
-            foreach (var partition in variant.Partitions)
+            if (failures.Count > 0)
             {
-                var curve = RevitCurveBuilder.BuildCurve(partition, 0);
-                if (curve == null) continue;
-
-                try
-                {
-                    var wall = Wall.Create(doc, curve, wallType.Id, level.Id, heightFeet, 0, false, false);
-                    if (wall != null)
-                        AppliedTracker.Track(wall.Id);
-                }
-                catch (Exception ex)
-                {
-                    PluginLogger.Warn($"Не удалось создать стену: {ex.Message}");
-                }
+                var message = "Не удалось создать помещения: " + string.Join("; ", failures);
+                PluginLogger.Warn(message);
+                throw new InvalidOperationException(message);
             }
         }
 
@@ -293,6 +218,59 @@ namespace RevitPlanningPlugin.Revit.Elements
             var plane = Plane.CreateByNormalAndOrigin(XYZ.BasisZ,
                 new XYZ(0, 0, level.Elevation));
             return SketchPlane.Create(doc, plane);
+        }
+
+        private static View GetTargetPlanView(Document doc, Level level)
+        {
+            if (doc.ActiveView is ViewPlan activePlan
+                && !activePlan.IsTemplate
+                && activePlan.ViewType == ViewType.FloorPlan
+                && activePlan.GenLevel != null
+                && activePlan.GenLevel.Id == level.Id)
+            {
+                return activePlan;
+            }
+
+            var matchingPlan = new FilteredElementCollector(doc)
+                .OfClass(typeof(ViewPlan))
+                .Cast<ViewPlan>()
+                .FirstOrDefault(view => !view.IsTemplate
+                                        && view.GenLevel != null
+                                        && view.GenLevel.Id == level.Id
+                                        && view.ViewType == ViewType.FloorPlan);
+
+            if (matchingPlan != null)
+                return matchingPlan;
+
+            throw new InvalidOperationException(
+                $"Не найден план этажа для уровня '{level.Name}'. Откройте план нужного уровня перед применением варианта.");
+        }
+
+        private static IEnumerable<ContourSegment> GetUniqueBoundarySegments(LayoutVariant variant)
+        {
+            var seen = new HashSet<string>();
+            var segments = variant.Partitions
+                .Concat(variant.Rooms.SelectMany(room => room.Boundary));
+
+            foreach (var segment in segments)
+            {
+                if (seen.Add(SegmentKey(segment)))
+                    yield return segment;
+            }
+        }
+
+        private static string SegmentKey(ContourSegment segment)
+        {
+            var a = PointKey(segment.Start);
+            var b = PointKey(segment.End);
+            return string.CompareOrdinal(a, b) <= 0 ? $"{a}|{b}" : $"{b}|{a}";
+        }
+
+        private static string PointKey(Point2D point)
+        {
+            return string.Format(CultureInfo.InvariantCulture, "{0:F3},{1:F3}",
+                Math.Round(point.X, 3),
+                Math.Round(point.Y, 3));
         }
     }
 }

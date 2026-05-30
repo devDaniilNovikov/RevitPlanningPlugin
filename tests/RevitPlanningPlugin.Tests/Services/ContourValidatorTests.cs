@@ -84,7 +84,7 @@ namespace RevitPlanningPlugin.Tests.Services
                 new Point2D(20, 10), new Point2D(0, 10)
             });
             // Смещаем конец последнего сегмента, чтобы создать разрыв
-            contour.OuterLoop[^1].End = new Point2D(5, 5);
+            contour.OuterLoop[contour.OuterLoop.Count - 1].End = new Point2D(5, 5);
 
             var result = _validator.Validate(contour);
             Assert.False(result.IsValid);
