@@ -57,6 +57,9 @@ namespace RevitPlanningPlugin.Tests.Services
             Assert.Contains("\"revit_context\"", prompt);
             Assert.Contains("\"success\": false", prompt);
             Assert.Contains("Критерии отличной генерации", prompt);
+            Assert.Contains("ровно одно поле rooms", prompt);
+            Assert.Contains("type=CommonArea", prompt);
+            Assert.Contains("не дроби квартиру", prompt);
         }
     }
 }

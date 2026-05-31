@@ -94,8 +94,15 @@ namespace RevitPlanningPlugin.Services.Prompt
 
             sb.AppendLine("Критерии отличной генерации для демонстрации работоспособности:");
             sb.AppendLine($"- Вернуть ровно {p.VariantCount} вариант(а/ов), каждый с уникальными id и variant_index начиная с 1.");
+            sb.AppendLine("- В каждом variant должно быть ровно одно поле rooms. Не создавай второй rooms, apartments, mop_rooms или отдельный список МОПов.");
+            sb.AppendLine("- Все квартиры и МОПы должны лежать в одном массиве rooms.");
+            sb.AppendLine("- Для demo-preview представляй каждую квартиру одним прямоугольным помещением type=LivingRoom с properties.apartment_id и properties.apartment_type.");
+            sb.AppendLine("- Не дроби квартиру на Kitchen, Bathroom, Bedroom или внутренние комнаты, если это явно не требуется.");
+            sb.AppendLine("- Если требуется CommonArea, создай отдельное помещение type=CommonArea. Не заменяй CommonArea на Lobby, Corridor или Elevator.");
+            sb.AppendLine("- JSON не должен содержать повторяющихся ключей внутри одного объекта.");
             sb.AppendLine("- Все помещения и label_point должны находиться внутри outer_loop и вне inner_loops.");
             sb.AppendLine("- Границы каждого помещения должны быть замкнутыми, без самопересечений и с координатами в метрах.");
+            sb.AppendLine("- Boundary каждого помещения должен быть простым прямоугольником из 4 line-сегментов: end каждого сегмента равен start следующего, последний end равен первому start.");
             sb.AppendLine("- Квартиры должны соответствовать apartment_types; rooms одной квартиры связывай через properties.apartment_id и properties.apartment_type.");
             sb.AppendLine("- МОПы должны быть представлены типами CommonArea, Corridor, Lobby, Elevator или Staircase и учитываться в mop_area/corridor_area.");
             sb.AppendLine("- partitions должны описывать разделители помещений, которые можно превратить в Room Separation Lines.");

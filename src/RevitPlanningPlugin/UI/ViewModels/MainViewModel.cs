@@ -849,10 +849,14 @@ namespace RevitPlanningPlugin.UI.ViewModels
 
             if (string.Equals(code, "LM_STUDIO_JSON_NOT_FOUND", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(code, "LM_STUDIO_JSON_NOT_CLOSED", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(code, "LM_STUDIO_INVALID_JSON", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(code, "INVALID_API_CONTRACT", StringComparison.OrdinalIgnoreCase))
+                || string.Equals(code, "LM_STUDIO_INVALID_JSON", StringComparison.OrdinalIgnoreCase))
             {
-                return "AI-сервис вернул ответ, который нельзя применить к Revit: нарушен JSON-контракт или обязательные поля результата.";
+                return "AI-сервис вернул невалидный JSON: " + ex.Message;
+            }
+
+            if (string.Equals(code, "INVALID_API_CONTRACT", StringComparison.OrdinalIgnoreCase))
+            {
+                return "AI-сервис вернул JSON, который нельзя применить к Revit: " + ex.Message;
             }
 
             return "AI-сервис: " + ex.Message;

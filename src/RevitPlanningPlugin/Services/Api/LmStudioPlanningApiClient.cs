@@ -136,7 +136,7 @@ namespace RevitPlanningPlugin.Services.Api
             catch (JsonException ex)
             {
                 throw new PlanningApiException(
-                    "LM Studio вернула текст, который не удалось разобрать как JSON-контракт.",
+                    "LM Studio вернула текст, который не удалось разобрать как JSON-контракт: " + ex.Message,
                     errorCode: "LM_STUDIO_INVALID_JSON",
                     inner: ex);
             }
