@@ -100,7 +100,7 @@ namespace RevitPlanningPlugin.Models.Domain
                 if (CorridorArea > 0)
                     parts.Add($"Коридоры: {CorridorArea:F1} м²");
                 parts.Add($"Эффективность: {UsableRatio:P1}");
-                parts.Add($"Score: {EfficiencyScore:F0}");
+                parts.Add($"Оценка: {EfficiencyScore:F0}");
                 return string.Join(" | ", parts);
             }
         }

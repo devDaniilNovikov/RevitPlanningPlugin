@@ -56,6 +56,15 @@ namespace RevitPlanningPlugin.Tests.Services
         }
 
         [Fact]
+        public void Validate_RussianRoomTypeAliases_AreAccepted()
+        {
+            var result = _validator.Validate(MakeParameters(), MakeContour(50, 50), "Жилое помещение, МОП");
+
+            Assert.True(result.IsValid);
+            Assert.DoesNotContain(result.Issues, i => i.Code == "ROOM_TYPE_UNKNOWN");
+        }
+
+        [Fact]
         public void Validate_InvalidVariantCount_ReturnsError()
         {
             var parameters = MakeParameters();

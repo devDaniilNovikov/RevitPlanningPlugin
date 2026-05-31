@@ -65,6 +65,72 @@ namespace RevitPlanningPlugin.UI.Converters
     }
 
     /// <summary>
+    /// Отображает внутренние enum/string значения человекочитаемыми русскими названиями.
+    /// </summary>
+    public class DisplayNameConverter : IValueConverter
+    {
+        public static readonly DisplayNameConverter Instance = new();
+
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+            => value switch
+            {
+                GenerationBackend.LmStudio => "LM Studio (локальная LLM)",
+                GenerationBackend.ExternalApi => "Внешний API",
+                GenerationBackend.Mock => "Демо-режим",
+
+                ApiEnvironment.Development => "Разработка",
+                ApiEnvironment.Staging => "Тестовый стенд",
+                ApiEnvironment.Production => "Продакшн",
+
+                GenerationType.Residential => "Жилая планировка",
+                GenerationType.Office => "Офисная планировка",
+                GenerationType.MixedUse => "Смешанное назначение",
+                GenerationType.Custom => "Пользовательский сценарий",
+
+                ValidationMode.Off => "Без проверки",
+                ValidationMode.Advisory => "Предупреждения",
+                ValidationMode.Strict => "Строгая проверка",
+
+                MockScenario.HappyPath => "Успешная генерация",
+                MockScenario.GenerationError => "Ошибка генерации",
+                MockScenario.Hallucination => "Галлюцинация геометрии",
+
+                RoomType.LivingRoom => "Жилое помещение",
+                RoomType.Bedroom => "Спальня",
+                RoomType.Kitchen => "Кухня",
+                RoomType.Bathroom => "Санузел",
+                RoomType.Corridor => "Коридор",
+                RoomType.Storage => "Кладовая",
+                RoomType.Office => "Кабинет",
+                RoomType.MeetingRoom => "Переговорная",
+                RoomType.OpenSpace => "Открытое пространство",
+                RoomType.Lobby => "Холл",
+                RoomType.Technical => "Техническое помещение",
+                RoomType.Staircase => "Лестничная клетка",
+                RoomType.Elevator => "Лифт",
+                RoomType.Balcony => "Балкон",
+                RoomType.CommonArea => "МОП",
+                RoomType.Other => "Другое",
+
+                ValidationSeverity.Info => "Информация",
+                ValidationSeverity.Warning => "Предупреждение",
+                ValidationSeverity.Error => "Ошибка",
+
+                string s => s.ToLowerInvariant() switch
+                {
+                    "efficiency" => "Эффективность",
+                    "area" => "Площади",
+                    "rooms" => "Состав помещений",
+                    _ => s
+                },
+                _ => value?.ToString() ?? string.Empty
+            };
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => throw new NotImplementedException();
+    }
+
+    /// <summary>
     /// Конвертирует (ratio 0–1, parentWidth) → ширина полоски для визуального бара эффективности.
     /// </summary>
     public class RatioToWidthConverter : IMultiValueConverter

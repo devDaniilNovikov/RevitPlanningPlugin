@@ -23,6 +23,7 @@
         <converters:StatusToColorConverter    x:Key="StatusToColor"/>
         <converters:NullToVisibilityConverter x:Key="NullToVisibility"/>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+        <converters:DisplayNameConverter      x:Key="DisplayName"/>
 
         <ObjectDataProvider x:Key="ApiEnvironmentValues" MethodName="GetValues"
                             ObjectType="{x:Type sys:Enum}">
@@ -188,7 +189,7 @@
             <DockPanel>
                 <TextBlock Text="Генератор планировок" FontSize="20" FontWeight="Bold"
                            Foreground="#1565C0" DockPanel.Dock="Left"/>
-                <TextBlock Text="AI-генерация квартир и МОПов внутри Revit"
+                <TextBlock Text="ИИ-генерация квартир и МОПов внутри Revit"
                            FontSize="11" Foreground="#999" VerticalAlignment="Bottom"
                            Margin="8,0,0,2" DockPanel.Dock="Left"/>
                 <Button Content="Отмена" Style="{StaticResource SecondaryButton}" DockPanel.Dock="Right"
@@ -234,12 +235,18 @@
                                         <RowDefinition/><RowDefinition/><RowDefinition/>
                                     </Grid.RowDefinitions>
 
-                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Backend:"
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Источник генерации:"
                                                VerticalAlignment="Center" Margin="0,4"/>
                                     <ComboBox  Grid.Row="0" Grid.Column="1"
                                                SelectedItem="{Binding Settings.Backend}"
                                                ItemsSource="{Binding Source={StaticResource GenerationBackendValues}}"
-                                               Margin="4"/>
+                                               Margin="4">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Converter={StaticResource DisplayName}}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
 
                                     <TextBlock Grid.Row="1" Grid.Column="0" Text="LM Studio URL:"
                                                VerticalAlignment="Center" Margin="0,4"/>
@@ -247,13 +254,13 @@
                                                Text="{Binding Settings.LmStudioBaseUrl, UpdateSourceTrigger=PropertyChanged}"
                                                Margin="4"/>
 
-                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="LM Studio model:"
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Модель LM Studio:"
                                                VerticalAlignment="Center" Margin="0,4"/>
                                     <TextBox   Grid.Row="2" Grid.Column="1"
                                                Text="{Binding Settings.LmStudioModel, UpdateSourceTrigger=PropertyChanged}"
                                                Margin="4"/>
 
-                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="External API URL:"
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="URL внешнего API:"
                                                VerticalAlignment="Center" Margin="0,4"/>
                                     <TextBox   Grid.Row="3" Grid.Column="1"
                                                Text="{Binding Settings.BaseUrl, UpdateSourceTrigger=PropertyChanged}"
@@ -264,15 +271,21 @@
                                     <ComboBox  Grid.Row="4" Grid.Column="1"
                                                SelectedItem="{Binding Settings.Environment}"
                                                ItemsSource="{Binding Source={StaticResource ApiEnvironmentValues}}"
-                                               Margin="4"/>
+                                               Margin="4">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Converter={StaticResource DisplayName}}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
 
-                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="API Key:"
+                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Ключ API:"
                                                VerticalAlignment="Center" Margin="0,4"/>
                                     <!-- PasswordBox: обновление через code-behind (PasswordChanged) -->
                                     <PasswordBox x:Name="ApiKeyBox" Grid.Row="5" Grid.Column="1"
                                                  Margin="4" PasswordChanged="ApiKeyBox_PasswordChanged"/>
 
-                                    <TextBlock Grid.Row="6" Grid.Column="0" Text="Bearer Token:"
+                                    <TextBlock Grid.Row="6" Grid.Column="0" Text="Bearer-токен:"
                                                VerticalAlignment="Center" Margin="0,4"/>
                                     <PasswordBox x:Name="BearerTokenBox" Grid.Row="6" Grid.Column="1"
                                                  Margin="4" PasswordChanged="BearerTokenBox_PasswordChanged"/>
@@ -283,12 +296,18 @@
                                                Text="{Binding Settings.RequestTimeoutSeconds}"
                                                Style="{StaticResource NumericBox}" Margin="4,2"/>
 
-                                    <TextBlock Grid.Row="8" Grid.Column="0" Text="Mock-сценарий:"
+                                    <TextBlock Grid.Row="8" Grid.Column="0" Text="Демо-сценарий:"
                                                VerticalAlignment="Center" Margin="0,4"/>
                                     <ComboBox  Grid.Row="8" Grid.Column="1"
                                                SelectedItem="{Binding Settings.MockScenario}"
                                                ItemsSource="{Binding Source={StaticResource MockScenarioValues}}"
-                                               Margin="4"/>
+                                               Margin="4">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Converter={StaticResource DisplayName}}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
                                 </Grid>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
@@ -299,7 +318,7 @@
                                 </StackPanel>
 
                                 <TextBlock Foreground="#888" FontSize="11" Margin="0,8,0,0" TextWrapping="Wrap"
-                                           Text="Production-режим: Backend = LmStudio, URL обычно http://localhost:1234/v1, model должен совпадать с именем загруженной в LM Studio модели. Секреты хранятся через DPAPI."/>
+                                           Text="Рабочий режим: источник генерации — LM Studio, URL обычно http://localhost:1234/v1, модель должна совпадать с именем загруженной модели в LM Studio. Секреты хранятся через DPAPI."/>
                             </StackPanel>
                         </Border>
                     </StackPanel>
@@ -387,7 +406,7 @@
                             <StackPanel>
                                 <TextBlock Style="{StaticResource SectionHeader}" Text="Общие параметры генерации"/>
                                 <TextBlock Foreground="#888" FontSize="11" Margin="0,0,0,8"
-                                           Text="Все варианты генерируются за один запрос к AI-сервису."/>
+                                           Text="Все варианты генерируются за один запрос к ИИ-сервису."/>
 
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -405,7 +424,13 @@
                                     <ComboBox Grid.Row="0" Grid.Column="1" Margin="4"
                                               Width="180" HorizontalAlignment="Left"
                                               SelectedItem="{Binding GenerationParams.GenerationType}"
-                                              ItemsSource="{Binding Source={StaticResource GenerationTypeValues}}"/>
+                                              ItemsSource="{Binding Source={StaticResource GenerationTypeValues}}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Converter={StaticResource DisplayName}}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
 
                                     <TextBlock Grid.Row="1" Grid.Column="0" VerticalAlignment="Center">
                                         <Run Text="Количество вариантов: "/>
@@ -423,20 +448,26 @@
                                     <ComboBox Grid.Row="2" Grid.Column="1" Margin="4"
                                               Width="180" HorizontalAlignment="Left"
                                               SelectedItem="{Binding GenerationParams.ValidationMode}"
-                                              ItemsSource="{Binding Source={StaticResource ValidationModeValues}}"/>
+                                              ItemsSource="{Binding Source={StaticResource ValidationModeValues}}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Converter={StaticResource DisplayName}}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
 
                                     <TextBlock Grid.Row="3" Grid.Column="0" Text="Приоритет оптимизации:"
                                                VerticalAlignment="Center"/>
                                     <ComboBox Grid.Row="3" Grid.Column="1" Margin="4"
                                               Width="160" HorizontalAlignment="Left"
                                               SelectedValue="{Binding GenerationParams.OptimizationPriority}"
-                                              SelectedValuePath="Content">
-                                        <ComboBoxItem Content="efficiency"/>
-                                        <ComboBoxItem Content="area"/>
-                                        <ComboBoxItem Content="rooms"/>
+                                              SelectedValuePath="Tag">
+                                        <ComboBoxItem Content="Эффективность" Tag="efficiency"/>
+                                        <ComboBoxItem Content="Площади" Tag="area"/>
+                                        <ComboBoxItem Content="Состав помещений" Tag="rooms"/>
                                     </ComboBox>
 
-                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Текстовый prompt:"
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Текстовое задание:"
                                                VerticalAlignment="Top" Margin="0,8,0,0"/>
                                     <TextBox Grid.Row="4" Grid.Column="1" Margin="4,8,4,0"
                                              Text="{Binding GenerationParams.TextPrompt, UpdateSourceTrigger=PropertyChanged}"
@@ -453,7 +484,7 @@
                                              TextWrapping="Wrap"
                                              MinHeight="48"
                                              VerticalScrollBarVisibility="Auto"
-                                             ToolTip="Введите типы через запятую, например: LivingRoom, Bedroom, Kitchen, CommonArea"/>
+                                             ToolTip="Введите типы через запятую, например: Жилое помещение, МОП"/>
                                 </Grid>
                             </StackPanel>
                         </Border>
@@ -554,7 +585,7 @@
                                                Text="{Binding GenerationParams.MopAreaTarget, UpdateSourceTrigger=PropertyChanged}"
                                                Style="{StaticResource NumericBox}"/>
                                     <TextBlock Grid.Row="0" Grid.Column="2"
-                                               Text="  0 = AI определяет автоматически"
+                                               Text="  0 = ИИ определяет автоматически"
                                                Foreground="#AAA" FontSize="11" VerticalAlignment="Center"/>
 
                                     <TextBlock Grid.Row="1" Grid.Column="0"
@@ -642,7 +673,7 @@
                                         <DataTemplate>
                                             <Border Style="{StaticResource VariantCard}">
                                                 <StackPanel>
-                                                    <!-- Заголовок: номер + Score -->
+                                                    <!-- Заголовок: номер + оценка -->
                                                     <DockPanel>
                                                         <TextBlock FontWeight="Bold" FontSize="13"
                                                                    DockPanel.Dock="Left">
@@ -837,7 +868,7 @@
                                                                             </Style.Triggers>
                                                                         </Style>
                                                                     </TextBlock.Style>
-                                                                    <Run Text="{Binding Type, Mode=OneWay}"/>
+                                                                    <Run Text="{Binding Type, Mode=OneWay, Converter={StaticResource DisplayName}}"/>
                                                                 </TextBlock>
                                                                 <TextBlock Grid.Column="2"
                                                                            Foreground="#444" FontSize="12"

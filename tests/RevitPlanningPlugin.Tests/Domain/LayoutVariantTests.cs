@@ -121,6 +121,7 @@ namespace RevitPlanningPlugin.Tests.Domain
             Assert.Contains("80", s);
             Assert.Contains("40", s);
             Assert.Contains("75", s);
+            Assert.Contains("Оценка", s);
         }
 
         // ——— ApartmentTypeSummary ———

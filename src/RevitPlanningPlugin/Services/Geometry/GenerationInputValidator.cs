@@ -39,7 +39,7 @@ namespace RevitPlanningPlugin.Services.Geometry
                 result.AddError("Минимальная ширина коридора МОП не может быть отрицательной.", "MOP_WIDTH_NEGATIVE");
 
             if (!string.IsNullOrEmpty(parameters.TextPrompt) && parameters.TextPrompt.Length > MaxPromptLength)
-                result.AddError($"Текстовый prompt слишком длинный: максимум {MaxPromptLength} символов.", "PROMPT_TOO_LONG");
+                result.AddError($"Текстовое задание слишком длинное: максимум {MaxPromptLength} символов.", "PROMPT_TOO_LONG");
 
             ValidateRequiredRoomTypeTokens(requiredRoomTypesText, result);
             ValidateFeasibility(parameters, contour, result);
@@ -47,7 +47,7 @@ namespace RevitPlanningPlugin.Services.Geometry
             if (LooksLikePromptInjection(parameters.TextPrompt))
             {
                 result.AddWarning(
-                    "Текстовый prompt содержит инструкции, похожие на попытку переопределить системные правила. Он будет передан как пользовательское требование, а не как управляющая инструкция.",
+                    "Текстовое задание содержит инструкции, похожие на попытку переопределить системные правила. Оно будет передано как пользовательское требование, а не как управляющая инструкция.",
                     "PROMPT_INJECTION_PATTERN");
             }
 
@@ -108,7 +108,7 @@ namespace RevitPlanningPlugin.Services.Geometry
             if (unknown.Count > 0)
             {
                 result.AddError(
-                    $"Неизвестные типы помещений: {string.Join(", ", unknown)}. Используйте значения RoomType или общепринятые алиасы: МОП, common_area.",
+                    $"Неизвестные типы помещений: {string.Join(", ", unknown)}. Используйте русские названия или значения контракта, например: Жилое помещение, МОП, LivingRoom, CommonArea.",
                     "ROOM_TYPE_UNKNOWN");
             }
         }
@@ -135,8 +135,11 @@ namespace RevitPlanningPlugin.Services.Geometry
         {
             return token.ToLowerInvariant() switch
             {
-                "mop" or "моп" or "common_area" or "common area" => nameof(RoomType.CommonArea),
-                "living_room" or "living room" => nameof(RoomType.LivingRoom),
+                "mop" or "моп" or "common_area" or "common area"
+                    or "место общего пользования" or "места общего пользования" or "общая зона" or "общий коридор"
+                    => nameof(RoomType.CommonArea),
+                "living_room" or "living room" or "жилое помещение" or "квартира" or "квартиры"
+                    => nameof(RoomType.LivingRoom),
                 "meeting_room" or "meeting room" => nameof(RoomType.MeetingRoom),
                 "open_space" or "open space" => nameof(RoomType.OpenSpace),
                 _ => token

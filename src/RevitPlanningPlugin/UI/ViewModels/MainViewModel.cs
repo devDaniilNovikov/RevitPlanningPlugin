@@ -202,7 +202,7 @@ namespace RevitPlanningPlugin.UI.ViewModels
 
         public GenerationParameters GenerationParams { get; set; } = new();
 
-        private string _requiredRoomTypesText = "LivingRoom, CommonArea, Lobby, Elevator";
+        private string _requiredRoomTypesText = "Жилое помещение, МОП";
         public string RequiredRoomTypesText
         {
             get => _requiredRoomTypesText;
@@ -325,7 +325,7 @@ namespace RevitPlanningPlugin.UI.ViewModels
         }
 
         public string ValidationMessages => _validationResult != null
-            ? string.Join("\n", _validationResult.Issues.Select(i => $"[{i.Severity}] {i.Message}"))
+            ? string.Join("\n", _validationResult.Issues.Select(FormatValidationIssue))
             : string.Empty;
 
         private ValidationResult? _generationValidationResult;
@@ -344,7 +344,7 @@ namespace RevitPlanningPlugin.UI.ViewModels
             _generationValidationResult != null && _generationValidationResult.Issues.Count > 0;
 
         public string GenerationValidationMessages => _generationValidationResult != null
-            ? string.Join("\n", _generationValidationResult.Issues.Select(i => $"[{i.Severity}] {i.Message}"))
+            ? string.Join("\n", _generationValidationResult.Issues.Select(FormatValidationIssue))
             : string.Empty;
 
         // ═══════════════════════════════════════════
@@ -434,11 +434,51 @@ namespace RevitPlanningPlugin.UI.ViewModels
         {
             return token.ToLowerInvariant() switch
             {
-                "mop" or "моп" or "common_area" or "common area" => nameof(RoomType.CommonArea),
-                "living_room" or "living room" => nameof(RoomType.LivingRoom),
+                "mop" or "моп" or "common_area" or "common area"
+                    or "место общего пользования" or "места общего пользования" or "общая зона" or "общий коридор"
+                    => nameof(RoomType.CommonArea),
+                "living_room" or "living room" or "жилое помещение" or "квартира" or "квартиры"
+                    => nameof(RoomType.LivingRoom),
                 "meeting_room" or "meeting room" => nameof(RoomType.MeetingRoom),
                 "open_space" or "open space" => nameof(RoomType.OpenSpace),
                 _ => token
+            };
+        }
+
+        private static string FormatValidationIssue(ValidationIssue issue)
+            => $"[{DisplayValidationSeverity(issue.Severity)}] {issue.Message}";
+
+        private static string DisplayValidationSeverity(ValidationSeverity severity)
+        {
+            return severity switch
+            {
+                ValidationSeverity.Info => "Информация",
+                ValidationSeverity.Warning => "Предупреждение",
+                ValidationSeverity.Error => "Ошибка",
+                _ => severity.ToString()
+            };
+        }
+
+        private static string DisplayRoomType(RoomType type)
+        {
+            return type switch
+            {
+                RoomType.LivingRoom => "Жилое помещение",
+                RoomType.Bedroom => "Спальня",
+                RoomType.Kitchen => "Кухня",
+                RoomType.Bathroom => "Санузел",
+                RoomType.Corridor => "Коридор",
+                RoomType.Storage => "Кладовая",
+                RoomType.Office => "Кабинет",
+                RoomType.MeetingRoom => "Переговорная",
+                RoomType.OpenSpace => "Открытое пространство",
+                RoomType.Lobby => "Холл",
+                RoomType.Technical => "Техническое помещение",
+                RoomType.Staircase => "Лестничная клетка",
+                RoomType.Elevator => "Лифт",
+                RoomType.Balcony => "Балкон",
+                RoomType.CommonArea => "МОП",
+                _ => "Другое"
             };
         }
 
@@ -735,7 +775,7 @@ namespace RevitPlanningPlugin.UI.ViewModels
                 GenerationValidationResult = inputValidation;
                 if (!inputValidation.IsValid)
                 {
-                    SetStatus(GenerationStatus.Error, "Параметры генерации не прошли проверку. Исправьте ошибки перед отправкой в AI-сервис.");
+                    SetStatus(GenerationStatus.Error, "Параметры генерации не прошли проверку. Исправьте ошибки перед отправкой в ИИ-сервис.");
                     PluginLogger.Warn($"Генерация заблокирована preflight-валидацией: {GenerationValidationMessages}");
                     return;
                 }
@@ -843,23 +883,21 @@ namespace RevitPlanningPlugin.UI.ViewModels
 
             if (string.Equals(code, "LM_STUDIO_GENERATION_ERROR", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(code, "GENERATION_ERROR", StringComparison.OrdinalIgnoreCase))
-            {
-                return "AI-сервис не смог сформировать планировку по заданным ограничениям: " + ex.Message;
-            }
+                return "ИИ-сервис не смог сформировать планировку по заданным ограничениям: " + ex.Message;
 
             if (string.Equals(code, "LM_STUDIO_JSON_NOT_FOUND", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(code, "LM_STUDIO_JSON_NOT_CLOSED", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(code, "LM_STUDIO_INVALID_JSON", StringComparison.OrdinalIgnoreCase))
             {
-                return "AI-сервис вернул невалидный JSON: " + ex.Message;
+                return "ИИ-сервис вернул невалидный JSON: " + ex.Message;
             }
 
             if (string.Equals(code, "INVALID_API_CONTRACT", StringComparison.OrdinalIgnoreCase))
             {
-                return "AI-сервис вернул JSON, который нельзя применить к Revit: " + ex.Message;
+                return "ИИ-сервис вернул JSON, который нельзя применить к Revit: " + ex.Message;
             }
 
-            return "AI-сервис: " + ex.Message;
+            return "ИИ-сервис: " + ex.Message;
         }
 
         private static string DescribeLayoutValidationFailure(ValidationResult result)
@@ -871,7 +909,7 @@ namespace RevitPlanningPlugin.UI.ViewModels
             var code = firstError.Code ?? string.Empty;
             if (IsHallucinationCode(code))
             {
-                return "Результат похож на галлюцинацию AI: геометрия помещения выходит за допустимый контур. Preview и запись в Revit заблокированы.";
+                return "Результат похож на галлюцинацию ИИ: геометрия помещения выходит за допустимый контур. Предпросмотр и запись в Revit заблокированы.";
             }
 
             return "Результат генерации не прошел строгую проверку: " + firstError.Message;
@@ -960,7 +998,7 @@ namespace RevitPlanningPlugin.UI.ViewModels
                     Points = ToPointCollection(vertices, Transform),
                     Fill = RoomFill(room.Type),
                     Stroke = Brushes.DimGray,
-                    Label = $"{room.Name} | {room.Type} | {room.Area:F1} м²"
+                    Label = $"{room.Name} | {DisplayRoomType(room.Type)} | {room.Area:F1} м²"
                 });
             }
 
