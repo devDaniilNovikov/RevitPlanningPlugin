@@ -31,6 +31,7 @@ Revit-плагин для получения архитектурных конт
 ### Production-интеграция с LM Studio
 - Основной backend генерации — `LmStudio`, локальный OpenAI-compatible сервер LM Studio.
 - Значения по умолчанию: `http://localhost:1234/v1`, модель `google/gemma-4-e4b`.
+- Production-дефолты рассчитаны на локальную Gemma: `temperature = 0.1`, `max_tokens = 12000`, таймаут HTTP-запроса `180 с`.
 - Плагин отправляет Revit-контекст в `/v1/chat/completions`, получает JSON, извлекает структурированный объект даже из ответа с markdown/reasoning-префиксом и блокирует результат, если DTO-контракт нарушен.
 
 ### Mock-режим (режим без реального API)
@@ -198,7 +199,7 @@ src/RevitPlanningPlugin/
 | Окружение        | dev / stage / prod                                            |
 | API Key          | Ключ доступа (хранится зашифрованно через DPAPI)              |
 | Bearer Token     | OAuth-токен (хранится зашифрованно)                           |
-| Таймаут (сек)    | Таймаут HTTP-запросов (по умолчанию 30 с)                     |
+| Таймаут (сек)    | Таймаут HTTP-запросов (по умолчанию 180 с для LM Studio)      |
 | Mock-сценарий    | HappyPath / GenerationError / Hallucination                   |
 
 Настройки: `%AppData%\RevitPlanningPlugin\settings.json`

@@ -58,7 +58,8 @@ C:\ProgramData\Autodesk\Revit\Addins\2022\
 3. Для production-режима выберите Backend = `LmStudio`.
 4. Запустите Local Server в LM Studio и загрузите `google/gemma-4-e4b`.
 5. Укажите LM Studio URL, обычно `http://localhost:1234/v1`, и имя модели так, как оно отображается в LM Studio.
-6. Нажмите «Сохранить», затем «Проверить соединение».
+6. Оставьте production-дефолты: таймаут 180 секунд, модель `google/gemma-4-e4b`. Это важно для длинных локальных ответов Gemma.
+7. Нажмите «Сохранить», затем «Проверить соединение».
 
 Если вместо локальной LLM используется внешний REST-сервис, выберите Backend = `ExternalApi`, укажите External API URL и при необходимости API Key или Bearer Token.
 

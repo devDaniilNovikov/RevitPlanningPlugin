@@ -13,17 +13,20 @@ namespace RevitPlanningPlugin.Services.Configuration
     public class PluginSettings
     {
         public const string DefaultLmStudioModel = "google/gemma-4-e4b";
+        public const double DefaultLmStudioTemperature = 0.1;
+        public const int DefaultLmStudioMaxTokens = 12000;
+        public const int DefaultRequestTimeoutSeconds = 180;
 
         public GenerationBackend Backend { get; set; } = GenerationBackend.LmStudio;
         public string LmStudioBaseUrl { get; set; } = "http://localhost:1234/v1";
         public string LmStudioModel { get; set; } = DefaultLmStudioModel;
-        public double LmStudioTemperature { get; set; } = 0.2;
-        public int LmStudioMaxTokens { get; set; } = 8192;
+        public double LmStudioTemperature { get; set; } = DefaultLmStudioTemperature;
+        public int LmStudioMaxTokens { get; set; } = DefaultLmStudioMaxTokens;
         public string BaseUrl { get; set; } = "https://api.example.com/v1";
-        public ApiEnvironment Environment { get; set; } = ApiEnvironment.Development;
+        public ApiEnvironment Environment { get; set; } = ApiEnvironment.Production;
         public string ApiKey { get; set; } = string.Empty;
         public string BearerToken { get; set; } = string.Empty;
-        public int RequestTimeoutSeconds { get; set; } = 30;
+        public int RequestTimeoutSeconds { get; set; } = DefaultRequestTimeoutSeconds;
         public int MaxRetries { get; set; } = 3;
         public string SourceUnit { get; set; } = "m";
         public bool AutoValidateContours { get; set; } = true;
@@ -70,6 +73,19 @@ namespace RevitPlanningPlugin.Services.Configuration
             {
                 LmStudioModel = DefaultLmStudioModel;
             }
+
+            if (LmStudioTemperature <= 0
+                || LmStudioTemperature > 1
+                || Math.Abs(LmStudioTemperature - 0.2) < 0.0001)
+            {
+                LmStudioTemperature = DefaultLmStudioTemperature;
+            }
+
+            if (LmStudioMaxTokens < DefaultLmStudioMaxTokens)
+                LmStudioMaxTokens = DefaultLmStudioMaxTokens;
+
+            if (RequestTimeoutSeconds < DefaultRequestTimeoutSeconds)
+                RequestTimeoutSeconds = DefaultRequestTimeoutSeconds;
         }
     }
 

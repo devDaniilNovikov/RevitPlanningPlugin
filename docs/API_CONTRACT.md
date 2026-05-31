@@ -18,7 +18,9 @@
 | Base URL | `http://localhost:1234/v1` |
 | Endpoint | `POST /chat/completions` |
 | Model | `google/gemma-4-e4b` или фактическое имя загруженной модели в LM Studio |
-| Temperature | `0.2` |
+| Temperature | `0.1` |
+| Max tokens | `12000` |
+| Timeout | `180 с` |
 | JSON mode | `response_format.type = json_object` |
 
 Плагин отправляет в LM Studio `GenerationRequestContext`: Revit-контекст, контур, параметры генерации и полный `llm_prompt`.

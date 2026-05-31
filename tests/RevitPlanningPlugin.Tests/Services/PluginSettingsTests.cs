@@ -30,5 +30,33 @@ namespace RevitPlanningPlugin.Tests.Services
 
             Assert.Equal("custom/local-model", settings.LmStudioModel);
         }
+
+        [Fact]
+        public void Defaults_AreProductionLmStudioSettings()
+        {
+            var settings = new PluginSettings();
+
+            Assert.Equal("google/gemma-4-e4b", settings.LmStudioModel);
+            Assert.Equal(0.1, settings.LmStudioTemperature);
+            Assert.Equal(12000, settings.LmStudioMaxTokens);
+            Assert.Equal(180, settings.RequestTimeoutSeconds);
+        }
+
+        [Fact]
+        public void NormalizeDefaults_UpgradesShortLmStudioLimits()
+        {
+            var settings = new PluginSettings
+            {
+                LmStudioTemperature = 0.2,
+                LmStudioMaxTokens = 8192,
+                RequestTimeoutSeconds = 30
+            };
+
+            settings.NormalizeDefaults();
+
+            Assert.Equal(0.1, settings.LmStudioTemperature);
+            Assert.Equal(12000, settings.LmStudioMaxTokens);
+            Assert.Equal(180, settings.RequestTimeoutSeconds);
+        }
     }
 }
