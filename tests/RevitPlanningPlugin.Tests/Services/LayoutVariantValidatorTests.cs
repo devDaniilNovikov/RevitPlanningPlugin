@@ -189,6 +189,21 @@ namespace RevitPlanningPlugin.Tests.Services
             Assert.DoesNotContain(result.Issues, i => i.Code == "APARTMENT_AREA_TOO_SMALL");
         }
 
+        [Fact]
+        public void Validate_StrictMode_TotalAreaContourMismatch_ReturnsWarningOnly()
+        {
+            var parameters = MakeStrictParameters();
+            var variant = MakeVariant();
+            variant.TotalArea = 20;
+
+            var result = _validator.Validate(new[] { variant }, parameters, MakeContour());
+
+            Assert.True(result.IsValid);
+            Assert.Contains(result.Issues,
+                i => i.Code == "TOTAL_AREA_CONTOUR_MISMATCH"
+                     && i.Severity == ValidationSeverity.Warning);
+        }
+
         private static LayoutVariant MakeVariant()
         {
             return new LayoutVariant

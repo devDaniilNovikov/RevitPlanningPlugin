@@ -307,7 +307,7 @@ namespace RevitPlanningPlugin.Services.Geometry
                 var areaDelta = Math.Abs(variant.TotalArea - contour.ApproximateArea);
                 if (areaDelta > Math.Max(5.0, contour.ApproximateArea * 0.05))
                 {
-                    AddByMode(result, parameters,
+                    result.AddWarning(
                         $"Вариант '{variant.Name}': total_area {variant.TotalArea:F1} м² заметно отличается от площади контура {contour.ApproximateArea:F1} м².",
                         "TOTAL_AREA_CONTOUR_MISMATCH");
                 }
