@@ -41,5 +41,9 @@ desktop.ini
 ## Logs
 *.log
 
+## Generated local artifacts
+RevitPlanningPlugin-Revit2022-LmStudio-*.zip
+image-preview.html
+
 ## Plugin settings (may contain encrypted secrets)
 settings.json

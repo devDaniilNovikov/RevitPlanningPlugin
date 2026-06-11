@@ -84,7 +84,7 @@ namespace RevitPlanningPlugin.Infrastructure
         {
             if (_isExecuting) return;
             _isExecuting = true;
-            CommandManager.InvalidateRequerySuggested();
+            RaiseCanExecuteChanged();
             try
             {
                 await _execute(parameter);
@@ -92,8 +92,10 @@ namespace RevitPlanningPlugin.Infrastructure
             finally
             {
                 _isExecuting = false;
-                CommandManager.InvalidateRequerySuggested();
+                RaiseCanExecuteChanged();
             }
         }
+
+        public void RaiseCanExecuteChanged() => CommandManager.InvalidateRequerySuggested();
     }
 }

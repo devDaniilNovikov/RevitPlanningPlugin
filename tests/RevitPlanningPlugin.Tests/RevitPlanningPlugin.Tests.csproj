@@ -16,13 +16,17 @@
   <ItemGroup>
     <Compile Include="../../src/RevitPlanningPlugin/Models/**/*.cs" />
     <Compile Include="../../src/RevitPlanningPlugin/Services/**/*.cs" />
-    <Compile Include="../../src/RevitPlanningPlugin/Infrastructure/**/*.cs" />
     <!-- Исключаем Revit API зависимые файлы -->
     <Compile Remove="../../src/RevitPlanningPlugin/Revit/**/*.cs" />
     <Compile Remove="../../src/RevitPlanningPlugin/UI/**/*.cs" />
     <Compile Remove="../../src/RevitPlanningPlugin/App.cs" />
     <Compile Remove="../../src/RevitPlanningPlugin/Commands/**/*.cs" />
     <Compile Remove="../../src/RevitPlanningPlugin/Properties/**/*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Security" />
   </ItemGroup>
 
   <ItemGroup>

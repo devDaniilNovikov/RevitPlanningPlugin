@@ -3,6 +3,7 @@ using System.IO;
 using NLog;
 using NLog.Config;
 using NLog.Targets;
+using RevitPlanningPlugin.Services.Diagnostics;
 
 namespace RevitPlanningPlugin.Services.Logging
 {
@@ -51,12 +52,15 @@ namespace RevitPlanningPlugin.Services.Logging
 
         public static void ApiRequest(string method, string url, int? statusCode = null)
         {
-            var sanitizedUrl = MaskQuerySecrets(url);
+            var sanitizedUrl = SanitizeUrlForLog(url);
             if (statusCode.HasValue)
                 Logger.Info($"API {method} {sanitizedUrl} → {statusCode}");
             else
                 Logger.Info($"API {method} {sanitizedUrl}");
         }
+
+        public static string SanitizeUrlForLog(string url)
+            => GenerationRequestDiagnostics.SafeDisplayUrl(url);
 
         /// <summary>Маскировка секретов в строке.</summary>
         private static string Sanitize(string message)
@@ -71,11 +75,5 @@ namespace RevitPlanningPlugin.Services.Logging
             return message;
         }
 
-        private static string MaskQuerySecrets(string url)
-        {
-            return System.Text.RegularExpressions.Regex.Replace(
-                url, @"(key|token|secret)=([^&]+)", "$1=***",
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        }
     }
 }

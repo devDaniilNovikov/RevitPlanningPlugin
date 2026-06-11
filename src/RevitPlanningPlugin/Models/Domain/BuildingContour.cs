@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Newtonsoft.Json;
 
 namespace RevitPlanningPlugin.Models.Domain
 {
@@ -31,16 +32,9 @@ namespace RevitPlanningPlugin.Models.Domain
         {
             get
             {
-                var pts = GetOuterVertices();
-                if (pts.Count < 3) return 0;
-                double area = 0;
-                for (int i = 0; i < pts.Count; i++)
-                {
-                    var j = (i + 1) % pts.Count;
-                    area += pts[i].X * pts[j].Y;
-                    area -= pts[j].X * pts[i].Y;
-                }
-                return Math.Abs(area) / 2.0;
+                var outerArea = ComputePolygonArea(GetOuterVertices());
+                var innerArea = InnerLoops.Sum(loop => ComputePolygonArea(loop.Select(s => s.Start).ToList()));
+                return Math.Max(0, outerArea - innerArea);
             }
         }
 
@@ -52,6 +46,27 @@ namespace RevitPlanningPlugin.Models.Domain
                 vertices.Add(seg.Start);
             }
             return vertices;
+        }
+
+        public List<List<Point2D>> GetInnerVertices()
+        {
+            return InnerLoops
+                .Select(loop => loop.Select(seg => seg.Start).ToList())
+                .ToList();
+        }
+
+        private static double ComputePolygonArea(List<Point2D> pts)
+        {
+            if (pts.Count < 3) return 0;
+
+            double area = 0;
+            for (int i = 0; i < pts.Count; i++)
+            {
+                var j = (i + 1) % pts.Count;
+                area += pts[i].X * pts[j].Y;
+                area -= pts[j].X * pts[i].Y;
+            }
+            return Math.Abs(area) / 2.0;
         }
 
         /// <summary>Проверка замкнутости внешнего контура.</summary>
@@ -86,7 +101,7 @@ namespace RevitPlanningPlugin.Models.Domain
         /// Ключ — timestamp, значение — список вариантов.
         /// Позволяет получить все сгенерированные планы по одному контуру.
         /// </summary>
-        [System.Text.Json.Serialization.JsonIgnore]
+        [JsonIgnore]
         public Dictionary<DateTime, List<LayoutVariant>> GenerationHistory { get; } = new();
 
         /// <summary>Общее количество сгенерированных вариантов по этому контуру.</summary>
