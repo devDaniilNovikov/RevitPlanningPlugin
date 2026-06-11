@@ -12,13 +12,17 @@ namespace RevitPlanningPlugin.Services.Configuration
     /// </summary>
     public class PluginSettings
     {
-        public const string DefaultLmStudioModel = "google/gemma-4-e4b";
-        public const double DefaultLmStudioTemperature = 0.1;
-        public const int DefaultLmStudioMaxTokens = 12000;
+        public const string DefaultAiServiceBaseUrl = "https://api.aitunnel.ru/v1";
+        public const string DefaultAiServiceModel = "gemma-4-31b-it";
+        public const double DefaultAiServiceTemperature = 0.1;
+        public const int DefaultAiServiceMaxTokens = 12000;
+        public const string DefaultLmStudioModel = DefaultAiServiceModel;
+        public const double DefaultLmStudioTemperature = DefaultAiServiceTemperature;
+        public const int DefaultLmStudioMaxTokens = DefaultAiServiceMaxTokens;
         public const int DefaultRequestTimeoutSeconds = 180;
 
         public GenerationBackend Backend { get; set; } = GenerationBackend.LmStudio;
-        public string LmStudioBaseUrl { get; set; } = "http://localhost:1234/v1";
+        public string LmStudioBaseUrl { get; set; } = DefaultAiServiceBaseUrl;
         public string LmStudioModel { get; set; } = DefaultLmStudioModel;
         public double LmStudioTemperature { get; set; } = DefaultLmStudioTemperature;
         public int LmStudioMaxTokens { get; set; } = DefaultLmStudioMaxTokens;
@@ -68,24 +72,38 @@ namespace RevitPlanningPlugin.Services.Configuration
 
         public void NormalizeDefaults()
         {
+            if (string.IsNullOrWhiteSpace(LmStudioBaseUrl) || IsLegacyLocalBaseUrl(LmStudioBaseUrl))
+                LmStudioBaseUrl = DefaultAiServiceBaseUrl;
+
             if (string.IsNullOrWhiteSpace(LmStudioModel)
-                || string.Equals(LmStudioModel, "qwen3-7b", StringComparison.OrdinalIgnoreCase))
+                || string.Equals(LmStudioModel, "qwen3-7b", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(LmStudioModel, "google/gemma-4-e4b", StringComparison.OrdinalIgnoreCase))
             {
-                LmStudioModel = DefaultLmStudioModel;
+                LmStudioModel = DefaultAiServiceModel;
             }
 
             if (LmStudioTemperature <= 0
                 || LmStudioTemperature > 1
                 || Math.Abs(LmStudioTemperature - 0.2) < 0.0001)
             {
-                LmStudioTemperature = DefaultLmStudioTemperature;
+                LmStudioTemperature = DefaultAiServiceTemperature;
             }
 
-            if (LmStudioMaxTokens < DefaultLmStudioMaxTokens)
-                LmStudioMaxTokens = DefaultLmStudioMaxTokens;
+            if (LmStudioMaxTokens < DefaultAiServiceMaxTokens)
+                LmStudioMaxTokens = DefaultAiServiceMaxTokens;
 
             if (RequestTimeoutSeconds < DefaultRequestTimeoutSeconds)
                 RequestTimeoutSeconds = DefaultRequestTimeoutSeconds;
+        }
+
+        private static bool IsLegacyLocalBaseUrl(string baseUrl)
+        {
+            if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
+                return true;
+
+            return string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(uri.Host, "127.0.0.1", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(uri.Host, "::1", StringComparison.OrdinalIgnoreCase);
         }
     }
 
@@ -141,6 +159,7 @@ namespace RevitPlanningPlugin.Services.Configuration
         public void Save(PluginSettings settings)
         {
             Directory.CreateDirectory(ConfigDir);
+            settings.NormalizeDefaults();
 
             // Сохраняем копию с зашифрованными секретами
             var toSave = new PluginSettings
@@ -182,9 +201,11 @@ namespace RevitPlanningPlugin.Services.Configuration
                 var encrypted = ProtectedData.Protect(data, Entropy, DataProtectionScope.CurrentUser);
                 return Convert.ToBase64String(encrypted);
             }
-            catch
+            catch (Exception ex)
             {
-                return plainText; // fallback — не шифруем при ошибке
+                throw new InvalidOperationException(
+                    "Не удалось зашифровать секреты настроек через DPAPI. Настройки не сохранены, чтобы не записать API-ключ открытым текстом.",
+                    ex);
             }
         }
 

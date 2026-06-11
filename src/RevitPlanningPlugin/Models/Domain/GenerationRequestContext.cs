@@ -9,6 +9,7 @@ namespace RevitPlanningPlugin.Models.Domain
         public BuildingContour Contour { get; set; } = new();
         public RevitProjectContext ProjectContext { get; set; } = new();
         public GenerationParameters Parameters { get; set; } = new();
+        public string GenerationNonce { get; set; } = string.Empty;
         public string Prompt { get; set; } = string.Empty;
     }
 }

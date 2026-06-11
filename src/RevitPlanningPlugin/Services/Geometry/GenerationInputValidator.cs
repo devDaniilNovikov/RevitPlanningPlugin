@@ -29,6 +29,7 @@ namespace RevitPlanningPlugin.Services.Geometry
             ValidateNonNegativeCounts(parameters, result);
             ValidateAreaRange(parameters.MinApartmentArea, parameters.MaxApartmentArea,
                 "площади квартиры", "APARTMENT_AREA_RANGE_INVALID", result);
+            ValidateApartmentTypeMaxAreas(parameters, result);
             ValidateAreaRange(parameters.MinRoomArea, parameters.MaxRoomArea,
                 "площади помещения", "ROOM_AREA_RANGE_INVALID", result);
 
@@ -68,10 +69,22 @@ namespace RevitPlanningPlugin.Services.Geometry
             foreach (var kv in counts.Where(kv => kv.Value < 0))
                 result.AddError($"Количество {kv.Key} не может быть отрицательным.", "APARTMENT_COUNT_NEGATIVE");
 
+            var positiveCounts = counts.Where(kv => kv.Value > 0).ToList();
             if (parameters.GenerationType == GenerationType.Residential
-                && counts.Values.All(v => v == 0))
+                && positiveCounts.Count == 0)
             {
-                result.AddError("Для жилой генерации должен быть задан хотя бы один тип квартиры.", "APARTMENT_PROGRAM_EMPTY");
+                var message = parameters.PlanningDetailMode == PlanningDetailMode.ApartmentRooms
+                    ? "Для режима планировки квартиры должен быть задан тип одной квартиры."
+                    : "Для жилой генерации должен быть задан хотя бы один тип квартиры.";
+                result.AddError(message, "APARTMENT_PROGRAM_EMPTY");
+            }
+
+            if (parameters.PlanningDetailMode == PlanningDetailMode.ApartmentRooms
+                && positiveCounts.Count > 1)
+            {
+                result.AddWarning(
+                    "В режиме планировки квартиры генерируется только одна квартира. Тип будет выбран по первому положительному счетчику: Студия, 1К, 2К, 3К, 4К.",
+                    "APARTMENT_MODE_MULTIPLE_TYPES");
             }
         }
 
@@ -90,6 +103,34 @@ namespace RevitPlanningPlugin.Services.Geometry
 
             if (min > 0 && max > 0 && min > max)
                 result.AddError($"Минимальное значение {label} не может быть больше максимального.", code);
+        }
+
+        private static void ValidateApartmentTypeMaxAreas(GenerationParameters parameters, ValidationResult result)
+        {
+            var limits = new Dictionary<string, double>
+            {
+                ["студии"] = parameters.StudioMaxApartmentArea,
+                ["1-комнатной квартиры"] = parameters.OneRoomMaxApartmentArea,
+                ["2-комнатной квартиры"] = parameters.TwoRoomMaxApartmentArea,
+                ["3-комнатной квартиры"] = parameters.ThreeRoomMaxApartmentArea,
+                ["4-комнатной квартиры"] = parameters.FourRoomMaxApartmentArea
+            };
+
+            foreach (var kv in limits)
+            {
+                if (kv.Value < 0)
+                {
+                    result.AddError($"Максимальная площадь {kv.Key} не может быть отрицательной.", "APARTMENT_TYPE_MAX_AREA_INVALID");
+                    continue;
+                }
+
+                if (parameters.MinApartmentArea > 0 && kv.Value > 0 && kv.Value < parameters.MinApartmentArea)
+                {
+                    result.AddError(
+                        $"Максимальная площадь {kv.Key} {kv.Value:F1} м² меньше общей минимальной площади квартиры {parameters.MinApartmentArea:F1} м².",
+                        "APARTMENT_TYPE_MAX_AREA_INVALID");
+                }
+            }
         }
 
         private static void ValidateRequiredRoomTypeTokens(string? text, ValidationResult result)
@@ -121,13 +162,44 @@ namespace RevitPlanningPlugin.Services.Geometry
             if (contour == null || contour.ApproximateArea <= 0)
                 return;
 
-            var requestedMinimum = parameters.TotalApartmentsRequested * Math.Max(parameters.MinApartmentArea, 0)
-                                   + Math.Max(parameters.MopAreaTarget, 0);
+            var requestedMinimum = parameters.PlanningDetailMode == PlanningDetailMode.ApartmentRooms
+                ? Math.Max(parameters.MinApartmentArea, 0)
+                : parameters.TotalApartmentsRequested * Math.Max(parameters.MinApartmentArea, 0)
+                  + Math.Max(parameters.MopAreaTarget, 0);
             if (requestedMinimum > contour.ApproximateArea * 1.05)
             {
                 result.AddError(
                     $"Минимально требуемая площадь {requestedMinimum:F1} м² превышает площадь контура {contour.ApproximateArea:F1} м².",
                     "PROGRAM_AREA_EXCEEDS_CONTOUR");
+            }
+
+            if (parameters.MaxApartmentArea <= 0 && parameters.GetApartmentTypeMaxAreaOverrides().Count == 0)
+                return;
+
+            if (parameters.PlanningDetailMode == PlanningDetailMode.ApartmentRooms)
+            {
+                var apartmentType = parameters.GetPrimaryApartmentType();
+                var maxApartmentArea = parameters.GetMaxApartmentAreaForType(apartmentType);
+                if (maxApartmentArea > 0 && contour.ApproximateArea > maxApartmentArea * 1.05)
+                {
+                    result.AddError(
+                        $"Площадь выбранного контура квартиры {contour.ApproximateArea:F1} м² больше максимальной площади для выбранного типа {maxApartmentArea:F1} м².",
+                        "APARTMENT_CONTOUR_EXCEEDS_MAX_AREA");
+                }
+
+                return;
+            }
+
+            if (parameters.TotalApartmentsRequested <= 0 || parameters.MopAreaTarget <= 0)
+                return;
+
+            var maximumApartmentsArea = parameters.GetMaximumApartmentProgramArea();
+            var maximumProgramArea = maximumApartmentsArea + parameters.MopAreaTarget;
+            if (maximumProgramArea < contour.ApproximateArea * 0.95)
+            {
+                result.AddError(
+                    $"Заданные ограничения физически не покрывают контур: максимум по квартирографии {maximumApartmentsArea:F1} м² + МОП {parameters.MopAreaTarget:F1} м² = {maximumProgramArea:F1} м², а площадь контура {contour.ApproximateArea:F1} м².",
+                    "PROGRAM_MAX_AREA_UNDERFILLS_CONTOUR");
             }
         }
 
@@ -140,6 +212,17 @@ namespace RevitPlanningPlugin.Services.Geometry
                     => nameof(RoomType.CommonArea),
                 "living_room" or "living room" or "жилое помещение" or "квартира" or "квартиры"
                     => nameof(RoomType.LivingRoom),
+                "bedroom" or "спальня" or "спальная комната" => nameof(RoomType.Bedroom),
+                "kitchen" or "кухня" or "кухонная зона" => nameof(RoomType.Kitchen),
+                "bathroom" or "санузел" or "ванная" or "ванная комната" or "туалет" or "wc"
+                    => nameof(RoomType.Bathroom),
+                "corridor" or "коридор" or "общий проход" => nameof(RoomType.Corridor),
+                "storage" or "кладовая" or "гардеробная" => nameof(RoomType.Storage),
+                "lobby" or "холл" or "лифтовый холл" => nameof(RoomType.Lobby),
+                "elevator" or "лифт" or "лифтовая шахта" => nameof(RoomType.Elevator),
+                "staircase" or "лестница" or "лестничная клетка" => nameof(RoomType.Staircase),
+                "balcony" or "балкон" or "лоджия" => nameof(RoomType.Balcony),
+                "technical" or "техническое помещение" or "техпомещение" => nameof(RoomType.Technical),
                 "meeting_room" or "meeting room" => nameof(RoomType.MeetingRoom),
                 "open_space" or "open space" => nameof(RoomType.OpenSpace),
                 _ => token

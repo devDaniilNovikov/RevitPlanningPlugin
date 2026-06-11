@@ -18,6 +18,10 @@ namespace RevitPlanningPlugin.Revit.Extraction
     public class RevitContextExtractor
     {
         private const double PointToleranceMeters = 0.01;
+        private const double WallJoinToleranceMeters = 0.50;
+        private const double LineIntersectionExtensionToleranceMeters = 1.00;
+        private const double IntersectionMergeToleranceMeters = 0.02;
+        private const double MinReconstructedSegmentLengthMeters = 0.05;
         private const int MaxContextElements = 200;
 
         public BuildingContour? TryExtractSelectedContour(UIDocument uiDocument, Document document, Level level)
@@ -33,6 +37,9 @@ namespace RevitPlanningPlugin.Revit.Extraction
             foreach (var id in selectedIds ?? new List<ElementId>())
             {
                 var element = document.GetElement(id);
+                if (element == null || !IsPotentialContourElement(element))
+                    continue;
+
                 var curve = TryGetCurve(element);
                 if (curve == null) continue;
 
@@ -64,6 +71,47 @@ namespace RevitPlanningPlugin.Revit.Extraction
             {
                 PluginLogger.Info($"Извлечен габаритный контур уровня Revit: {levelContour!.OuterLoop.Count} сегментов.");
                 return levelContour;
+            }
+
+            return null;
+        }
+
+        public BuildingContour? TryExtractContourFromElementIds(
+            Document document,
+            ICollection<ElementId> elementIds,
+            Level level,
+            string source,
+            string name)
+        {
+            var selectedIdValues = new HashSet<int>(
+                (elementIds ?? new List<ElementId>()).Select(id => id.IntegerValue));
+            var segments = new List<ContourSegment>();
+
+            foreach (var id in elementIds ?? new List<ElementId>())
+            {
+                var element = document.GetElement(id);
+                if (element == null || !IsPotentialContourElement(element))
+                    continue;
+
+                var curve = TryGetCurve(element);
+                if (curve == null) continue;
+
+                var segment = ToSegment(curve);
+                if (segment != null)
+                    segments.Add(segment);
+            }
+
+            if (TryCreateContourFromSegments(
+                    segments,
+                    $"revit-buffered-{DateTime.Now:yyyyMMddHHmmss}",
+                    name,
+                    level,
+                    selectedIdValues,
+                    source,
+                    out var contour))
+            {
+                PluginLogger.Info($"Извлечен контур из накопленных элементов Revit: {contour!.OuterLoop.Count} сегментов.");
+                return contour;
             }
 
             return null;
@@ -326,10 +374,20 @@ namespace RevitPlanningPlugin.Revit.Extraction
                 return false;
 
             var points = new List<Point2D>();
-            foreach (var id in selectedIds)
+            var sourceElements = selectedIds
+                .Select(document.GetElement)
+                .Where(element => element != null && IsSelectedBoundingFallbackElement(document, element!, level))
+                .Select(element => element!)
+                .ToList();
+
+            if (sourceElements.Count == 0)
+                return false;
+
+            if (sourceElements.Count == 1 && !CanUseSingleElementBoundingFallback(sourceElements[0]))
+                return false;
+
+            foreach (var element in sourceElements)
             {
-                var element = document.GetElement(id);
-                if (element == null) continue;
                 AddBoundingBoxPoints(points, element.get_BoundingBox(document.ActiveView)
                                             ?? element.get_BoundingBox(null));
             }
@@ -342,7 +400,8 @@ namespace RevitPlanningPlugin.Revit.Extraction
                 new Dictionary<string, string>
                 {
                     ["source"] = "revit_selection_bounding_box",
-                    ["selected_element_count"] = selectedIdValues.Count.ToString(CultureInfo.InvariantCulture)
+                    ["selected_element_count"] = selectedIdValues.Count.ToString(CultureInfo.InvariantCulture),
+                    ["source_element_count"] = sourceElements.Count.ToString(CultureInfo.InvariantCulture)
                 },
                 out contour);
         }
@@ -403,43 +462,7 @@ namespace RevitPlanningPlugin.Revit.Extraction
                 return true;
             }
 
-            return TryExtractActiveViewCropContour(document, level, selectedIdValues, out contour);
-        }
-
-        private static bool TryExtractActiveViewCropContour(
-            Document document,
-            Level level,
-            HashSet<int> selectedIdValues,
-            out BuildingContour? contour)
-        {
-            contour = null;
-            try
-            {
-                var view = document.ActiveView;
-                if (view == null || !view.CropBoxActive)
-                    return false;
-
-                var points = new List<Point2D>();
-                AddBoundingBoxPoints(points, view.CropBox);
-
-                return TryCreateBoundingContourFromPoints(
-                    points,
-                    $"revit-view-crop-{DateTime.Now:yyyyMMddHHmmss}",
-                    $"Габарит активного вида Revit: {view.Name}",
-                    level,
-                    new Dictionary<string, string>
-                    {
-                        ["source"] = "revit_active_view_crop",
-                        ["active_view"] = view.Name ?? string.Empty,
-                        ["selected_element_count"] = selectedIdValues.Count.ToString(CultureInfo.InvariantCulture)
-                    },
-                    out contour);
-            }
-            catch (Exception ex)
-            {
-                PluginLogger.Debug($"Не удалось извлечь габарит активного вида: {ex.Message}");
-                return false;
-            }
+            return false;
         }
 
         private static bool TryCreateBoundingContourFromPoints(
@@ -526,8 +549,12 @@ namespace RevitPlanningPlugin.Revit.Extraction
                 return false;
 
             var ordered = OrderConnectedLoop(segments);
-            if (!IsClosedConnectedLoop(ordered))
+            if (!IsClosedConnectedLoop(ordered)
+                && !TryCreateLoopFromLineIntersections(segments, out ordered)
+                && !TryCreateLoopFromLooseEndpoints(segments, out ordered))
+            {
                 return false;
+            }
 
             SnapConnectedLoop(ordered);
             contour = new BuildingContour
@@ -579,11 +606,46 @@ namespace RevitPlanningPlugin.Revit.Extraction
 
         private static bool IsPotentialContourElement(Element element)
         {
-            if (element is Wall || element is CurveElement)
+            if (element is Wall)
                 return true;
 
             var categoryId = element.Category?.Id.IntegerValue;
-            return categoryId == (int)BuiltInCategory.OST_RoomSeparationLines;
+            if (categoryId == (int)BuiltInCategory.OST_RoomSeparationLines
+                || categoryId == (int)BuiltInCategory.OST_Walls)
+            {
+                return true;
+            }
+
+            return element is CurveElement
+                   && element.Category?.CategoryType == CategoryType.Model;
+        }
+
+        private static bool IsSelectedBoundingFallbackElement(Document document, Element element, Level level)
+        {
+            if (element is ElementType)
+                return false;
+
+            var category = element.Category;
+            if (category == null || category.CategoryType != CategoryType.Model)
+                return false;
+
+            var categoryId = category.Id.IntegerValue;
+            var isAllowedCategory =
+                categoryId == (int)BuiltInCategory.OST_Walls
+                || categoryId == (int)BuiltInCategory.OST_Floors
+                || categoryId == (int)BuiltInCategory.OST_Rooms
+                || categoryId == (int)BuiltInCategory.OST_RoomSeparationLines;
+
+            return isAllowedCategory && BelongsToLevel(document, element, level);
+        }
+
+        private static bool CanUseSingleElementBoundingFallback(Element element)
+        {
+            var categoryId = element.Category?.Id.IntegerValue;
+            return element is Floor
+                   || element is Room
+                   || categoryId == (int)BuiltInCategory.OST_Floors
+                   || categoryId == (int)BuiltInCategory.OST_Rooms;
         }
 
         private static Curve? TryGetCurve(Element? element)
@@ -635,7 +697,85 @@ namespace RevitPlanningPlugin.Revit.Extraction
         private static Point2D ToPoint2D(XYZ point)
             => new(point.X * UnitConverter.FeetToMeters, point.Y * UnitConverter.FeetToMeters);
 
+        private static bool TryCreateLoopFromLooseEndpoints(
+            List<ContourSegment> segments,
+            out List<ContourSegment> loop)
+        {
+            loop = OrderConnectedLoop(segments, WallJoinToleranceMeters);
+            return IsClosedConnectedLoop(loop, WallJoinToleranceMeters);
+        }
+
+        private static bool TryCreateLoopFromLineIntersections(
+            List<ContourSegment> source,
+            out List<ContourSegment> loop)
+        {
+            loop = new List<ContourSegment>();
+            if (source.Count < 3 || source.Any(segment => segment.Type != SegmentType.Line))
+                return false;
+
+            var intersections = source
+                .Select(_ => new List<LineIntersectionCandidate>())
+                .ToList();
+
+            for (int i = 0; i < source.Count; i++)
+            {
+                for (int j = i + 1; j < source.Count; j++)
+                {
+                    if (!TryIntersectInfiniteLines(source[i].Start, source[i].End, source[j].Start, source[j].End, out var point))
+                        continue;
+
+                    if (!TryGetLineParameter(source[i].Start, source[i].End, point, out var ti)
+                        || !TryGetLineParameter(source[j].Start, source[j].End, point, out var tj))
+                    {
+                        continue;
+                    }
+
+                    if (!IsParameterWithinExtendedSegment(ti, source[i], LineIntersectionExtensionToleranceMeters)
+                        || !IsParameterWithinExtendedSegment(tj, source[j], LineIntersectionExtensionToleranceMeters))
+                    {
+                        continue;
+                    }
+
+                    AddIntersectionCandidate(intersections[i], point, ti);
+                    AddIntersectionCandidate(intersections[j], point, tj);
+                }
+            }
+
+            var reconstructed = new List<ContourSegment>();
+            for (int i = 0; i < source.Count; i++)
+            {
+                var candidates = intersections[i]
+                    .OrderBy(candidate => candidate.Parameter)
+                    .ToList();
+
+                if (candidates.Count < 2)
+                    return false;
+
+                var first = candidates.First();
+                var last = candidates.Last();
+                if (first.Point.DistanceTo(last.Point) < MinReconstructedSegmentLengthMeters)
+                    return false;
+
+                reconstructed.Add(new ContourSegment
+                {
+                    Type = SegmentType.Line,
+                    Start = first.Point,
+                    End = last.Point
+                });
+            }
+
+            var ordered = OrderConnectedLoop(reconstructed, IntersectionMergeToleranceMeters);
+            if (!IsClosedConnectedLoop(ordered, IntersectionMergeToleranceMeters))
+                return false;
+
+            loop = ordered;
+            return true;
+        }
+
         private static List<ContourSegment> OrderConnectedLoop(List<ContourSegment> source)
+            => OrderConnectedLoop(source, PointToleranceMeters);
+
+        private static List<ContourSegment> OrderConnectedLoop(List<ContourSegment> source, double toleranceMeters)
         {
             var remaining = new List<ContourSegment>(source);
             var ordered = new List<ContourSegment> { remaining[0] };
@@ -644,7 +784,7 @@ namespace RevitPlanningPlugin.Revit.Extraction
             while (remaining.Count > 0)
             {
                 var end = ordered[ordered.Count - 1].End;
-                var nextIndex = remaining.FindIndex(s => end.DistanceTo(s.Start) <= PointToleranceMeters);
+                var nextIndex = remaining.FindIndex(s => end.DistanceTo(s.Start) <= toleranceMeters);
                 if (nextIndex >= 0)
                 {
                     ordered.Add(remaining[nextIndex]);
@@ -652,7 +792,7 @@ namespace RevitPlanningPlugin.Revit.Extraction
                     continue;
                 }
 
-                var reverseIndex = remaining.FindIndex(s => end.DistanceTo(s.End) <= PointToleranceMeters);
+                var reverseIndex = remaining.FindIndex(s => end.DistanceTo(s.End) <= toleranceMeters);
                 if (reverseIndex >= 0)
                 {
                     ordered.Add(Reverse(remaining[reverseIndex]));
@@ -668,17 +808,20 @@ namespace RevitPlanningPlugin.Revit.Extraction
         }
 
         private static bool IsClosedConnectedLoop(List<ContourSegment> loop)
+            => IsClosedConnectedLoop(loop, PointToleranceMeters);
+
+        private static bool IsClosedConnectedLoop(List<ContourSegment> loop, double toleranceMeters)
         {
             if (loop.Count < 3)
                 return false;
 
             for (int i = 0; i < loop.Count - 1; i++)
             {
-                if (loop[i].End.DistanceTo(loop[i + 1].Start) > PointToleranceMeters)
+                if (loop[i].End.DistanceTo(loop[i + 1].Start) > toleranceMeters)
                     return false;
             }
 
-            return loop[loop.Count - 1].End.DistanceTo(loop[0].Start) <= PointToleranceMeters;
+            return loop[loop.Count - 1].End.DistanceTo(loop[0].Start) <= toleranceMeters;
         }
 
         private static void SnapConnectedLoop(List<ContourSegment> loop)
@@ -759,6 +902,81 @@ namespace RevitPlanningPlugin.Revit.Extraction
                 EllipseStartAngle = segment.EllipseEndAngle,
                 EllipseEndAngle = segment.EllipseStartAngle
             };
+        }
+
+        private static bool TryIntersectInfiniteLines(
+            Point2D a1,
+            Point2D a2,
+            Point2D b1,
+            Point2D b2,
+            out Point2D point)
+        {
+            point = new Point2D();
+            var ax = a2.X - a1.X;
+            var ay = a2.Y - a1.Y;
+            var bx = b2.X - b1.X;
+            var by = b2.Y - b1.Y;
+            var denominator = Cross(ax, ay, bx, by);
+
+            if (Math.Abs(denominator) < 1e-9)
+                return false;
+
+            var qx = b1.X - a1.X;
+            var qy = b1.Y - a1.Y;
+            var t = Cross(qx, qy, bx, by) / denominator;
+            point = new Point2D(a1.X + t * ax, a1.Y + t * ay);
+            return true;
+        }
+
+        private static bool TryGetLineParameter(Point2D start, Point2D end, Point2D point, out double parameter)
+        {
+            parameter = 0;
+            var dx = end.X - start.X;
+            var dy = end.Y - start.Y;
+            var lengthSquared = dx * dx + dy * dy;
+            if (lengthSquared < 1e-12)
+                return false;
+
+            parameter = ((point.X - start.X) * dx + (point.Y - start.Y) * dy) / lengthSquared;
+            return true;
+        }
+
+        private static bool IsParameterWithinExtendedSegment(
+            double parameter,
+            ContourSegment segment,
+            double extensionToleranceMeters)
+        {
+            var length = segment.Start.DistanceTo(segment.End);
+            if (length < MinReconstructedSegmentLengthMeters)
+                return false;
+
+            var normalizedTolerance = extensionToleranceMeters / length;
+            return parameter >= -normalizedTolerance
+                   && parameter <= 1.0 + normalizedTolerance;
+        }
+
+        private static void AddIntersectionCandidate(
+            List<LineIntersectionCandidate> candidates,
+            Point2D point,
+            double parameter)
+        {
+            if (candidates.Any(candidate => candidate.Point.DistanceTo(point) <= IntersectionMergeToleranceMeters))
+                return;
+
+            candidates.Add(new LineIntersectionCandidate
+            {
+                Point = point,
+                Parameter = parameter
+            });
+        }
+
+        private static double Cross(double ax, double ay, double bx, double by)
+            => ax * by - ay * bx;
+
+        private sealed class LineIntersectionCandidate
+        {
+            public Point2D Point { get; set; } = new();
+            public double Parameter { get; set; }
         }
 
         private static void TryAdd(Dictionary<string, string> target, string key, string? value)

@@ -17,8 +17,8 @@ using RevitPlanningPlugin.Services.Logging;
 namespace RevitPlanningPlugin.Services.Api
 {
     /// <summary>
-    /// Клиент локальной LM Studio через OpenAI-compatible Chat Completions API.
-    /// Контуры берутся из Revit/внешнего API, а генерация выполняется локальной LLM.
+    /// Клиент AI Tunnel/OpenAI-compatible Chat Completions API.
+    /// Контуры берутся из Revit/внешнего API, а генерация выполняется внешним AI-сервисом.
     /// </summary>
     public class LmStudioPlanningApiClient : IPlanningApiClient, IDisposable
     {
@@ -43,12 +43,18 @@ namespace RevitPlanningPlugin.Services.Api
             };
 
             _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            _http.DefaultRequestHeaders.CacheControl = new CacheControlHeaderValue
+            {
+                NoCache = true,
+                NoStore = true
+            };
+            _http.DefaultRequestHeaders.Pragma.ParseAdd("no-cache");
 
-            var token = !string.IsNullOrWhiteSpace(_settings.BearerToken)
+            var authHeader = CreateBearerAuthenticationHeader(!string.IsNullOrWhiteSpace(_settings.BearerToken)
                 ? _settings.BearerToken
-                : _settings.ApiKey;
-            if (!string.IsNullOrWhiteSpace(token))
-                _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                : _settings.ApiKey);
+            if (authHeader != null)
+                _http.DefaultRequestHeaders.Authorization = authHeader;
         }
 
         public async Task<bool> TestConnectionAsync(CancellationToken ct = default)
@@ -61,14 +67,14 @@ namespace RevitPlanningPlugin.Services.Api
         public Task<List<ApiContourSummaryDto>> GetContourListAsync(CancellationToken ct = default)
         {
             throw new PlanningApiException(
-                "LM Studio не хранит контуры. Для production-сценария извлеките контур из текущей Revit-модели или переключите backend на ExternalApi.",
+                "AI Tunnel не хранит контуры. Для production-сценария извлеките контур из текущей Revit-модели или переключите backend на ExternalApi.",
                 errorCode: "LM_STUDIO_CONTOURS_NOT_SUPPORTED");
         }
 
         public Task<BuildingContour> GetContourAsync(string contourId, CancellationToken ct = default)
         {
             throw new PlanningApiException(
-                "LM Studio не возвращает контуры по ID. Используйте извлечение контура из Revit или backend ExternalApi.",
+                "AI Tunnel не возвращает контуры по ID. Используйте извлечение контура из Revit или backend ExternalApi.",
                 errorCode: "LM_STUDIO_CONTOURS_NOT_SUPPORTED");
         }
 
@@ -78,7 +84,7 @@ namespace RevitPlanningPlugin.Services.Api
             CancellationToken ct = default)
         {
             throw new PlanningApiException(
-                "Для LM Studio требуется полный GenerationRequestContext с Revit-контекстом и геометрией контура.",
+                "Для AI Tunnel требуется полный GenerationRequestContext с Revit-контекстом и геометрией контура.",
                 errorCode: "LM_STUDIO_CONTEXT_REQUIRED");
         }
 
@@ -88,7 +94,7 @@ namespace RevitPlanningPlugin.Services.Api
         {
             if (context == null) throw new ArgumentNullException(nameof(context));
             if (string.IsNullOrWhiteSpace(context.Prompt))
-                throw new PlanningApiException("Prompt для LM Studio не сформирован.", errorCode: "LM_STUDIO_PROMPT_REQUIRED");
+                throw new PlanningApiException("Prompt для AI Tunnel не сформирован.", errorCode: "LM_STUDIO_PROMPT_REQUIRED");
 
             var request = new LmStudioChatRequestDto
             {
@@ -102,7 +108,7 @@ namespace RevitPlanningPlugin.Services.Api
                     {
                         Role = "system",
                         Content =
-                            "Ты локальный AI-сервис генерации планировок для Revit. " +
+                            "Ты AI-сервис генерации планировок для Revit. " +
                             "Верни только один JSON-объект по указанному контракту, без markdown, без пояснений и без reasoning-текста. " +
                             "Если модель использует thinking mode, не включай <think> или рассуждения в ответ."
                     },
@@ -119,13 +125,13 @@ namespace RevitPlanningPlugin.Services.Api
             if (response?.Error != null)
             {
                 throw new PlanningApiException(
-                    $"LM Studio: {response.Error.Message}",
+                    $"AI Tunnel: {response.Error.Message}",
                     errorCode: response.Error.Code ?? "LM_STUDIO_ERROR");
             }
 
             var content = response?.Choices?.FirstOrDefault()?.Message?.Content;
             if (string.IsNullOrWhiteSpace(content))
-                throw new PlanningApiException("LM Studio вернула пустой ответ.", errorCode: "LM_STUDIO_EMPTY_RESPONSE");
+                throw new PlanningApiException("AI Tunnel вернул пустой ответ.", errorCode: "LM_STUDIO_EMPTY_RESPONSE");
 
             var json = ExtractJsonObject(content);
             ApiResponse<ApiGenerationResultDto>? envelope;
@@ -136,38 +142,85 @@ namespace RevitPlanningPlugin.Services.Api
             catch (JsonException ex)
             {
                 throw new PlanningApiException(
-                    "LM Studio вернула текст, который не удалось разобрать как JSON-контракт: " + ex.Message,
+                    "AI Tunnel вернул текст, который не удалось разобрать как JSON-контракт: " + ex.Message,
                     errorCode: "LM_STUDIO_INVALID_JSON",
                     inner: ex);
             }
 
             EnsureSuccess(envelope);
             if (envelope?.Data == null)
-                throw new PlanningApiException("LM Studio не вернула data с результатом генерации.", errorCode: "LM_STUDIO_EMPTY_RESULT");
+                throw new PlanningApiException("AI Tunnel не вернул data с результатом генерации.", errorCode: "LM_STUDIO_EMPTY_RESULT");
 
             if (string.Equals(envelope.Data.Status, "error", StringComparison.OrdinalIgnoreCase))
             {
                 throw new PlanningApiException(
-                    envelope.Data.Error ?? "LM Studio не смогла сгенерировать валидную планировку.",
+                    envelope.Data.Error ?? "AI Tunnel не смог сгенерировать валидную планировку.",
                     errorCode: "LM_STUDIO_GENERATION_ERROR");
             }
 
             ApiResponseContractValidator.ValidateGenerationResult(envelope.Data, context.Parameters.VariantCount);
             PluginLogger.Info(
-                $"LM Studio response '{envelope.Data.RequestId}' validated: {envelope.Data.Variants.Count} variant(s), model={_settings.LmStudioModel}.");
+                $"AI Tunnel response '{envelope.Data.RequestId}' validated: {envelope.Data.Variants.Count} variant(s), model={_settings.LmStudioModel}.");
 
             return envelope.Data.Variants.Select(DtoMapper.ToDomain).ToList();
+        }
+
+        public static string NormalizeBearerToken(string? token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+                return string.Empty;
+
+            var normalized = StripSurroundingQuotes(token.Trim());
+            normalized = Regex.Replace(normalized, @"[\r\n]+", " ").Trim();
+
+            var authorizationMatch = Regex.Match(
+                normalized,
+                @"Authorization\s*:\s*Bearer\s+([^""'\s]+)",
+                RegexOptions.IgnoreCase);
+            if (authorizationMatch.Success)
+                return authorizationMatch.Groups[1].Value.Trim();
+
+            var bearerMatch = Regex.Match(
+                normalized,
+                @"^Bearer\s+(.+)$",
+                RegexOptions.IgnoreCase);
+            if (bearerMatch.Success)
+                normalized = bearerMatch.Groups[1].Value.Trim();
+
+            normalized = StripSurroundingQuotes(normalized);
+
+            return normalized;
+        }
+
+        public static AuthenticationHeaderValue? CreateBearerAuthenticationHeader(string? token)
+        {
+            var normalized = NormalizeBearerToken(token);
+            return string.IsNullOrWhiteSpace(normalized)
+                ? null
+                : new AuthenticationHeaderValue("Bearer", normalized);
+        }
+
+        private static string StripSurroundingQuotes(string value)
+        {
+            if (value.Length >= 2
+                && ((value[0] == '"' && value[value.Length - 1] == '"')
+                    || (value[0] == '\'' && value[value.Length - 1] == '\'')))
+            {
+                return value.Substring(1, value.Length - 2).Trim();
+            }
+
+            return value;
         }
 
         public static string ExtractJsonObject(string content)
         {
             if (string.IsNullOrWhiteSpace(content))
-                throw new PlanningApiException("LM Studio вернула пустой ответ.", errorCode: "LM_STUDIO_EMPTY_RESPONSE");
+                throw new PlanningApiException("AI Tunnel вернул пустой ответ.", errorCode: "LM_STUDIO_EMPTY_RESPONSE");
 
             var trimmed = StripMarkdownFence(StripThinkBlocks(content.Trim()));
             var start = trimmed.IndexOf('{');
             if (start < 0)
-                throw new PlanningApiException("В ответе LM Studio не найден JSON-объект.", errorCode: "LM_STUDIO_JSON_NOT_FOUND");
+                throw new PlanningApiException("В ответе AI Tunnel не найден JSON-объект.", errorCode: "LM_STUDIO_JSON_NOT_FOUND");
 
             var depth = 0;
             var inString = false;
@@ -204,13 +257,13 @@ namespace RevitPlanningPlugin.Services.Api
                 }
             }
 
-            throw new PlanningApiException("JSON-объект в ответе LM Studio не закрыт.", errorCode: "LM_STUDIO_JSON_NOT_CLOSED");
+            throw new PlanningApiException("JSON-объект в ответе AI Tunnel не закрыт.", errorCode: "LM_STUDIO_JSON_NOT_CLOSED");
         }
 
         public static void EnsureModelAvailable(LmStudioModelsResponseDto? models, string configuredModel)
         {
             if (models == null)
-                throw new PlanningApiException("LM Studio вернула пустой список моделей.", errorCode: "LM_STUDIO_MODELS_EMPTY");
+                throw new PlanningApiException("AI Tunnel вернул пустой список моделей.", errorCode: "LM_STUDIO_MODELS_EMPTY");
 
             var modelIds = models.Data?
                 .Select(m => m.Id)
@@ -218,16 +271,16 @@ namespace RevitPlanningPlugin.Services.Api
                 .ToList() ?? new List<string>();
 
             if (modelIds.Count == 0)
-                throw new PlanningApiException("LM Studio доступна, но список загруженных моделей пуст.", errorCode: "LM_STUDIO_MODELS_EMPTY");
+                throw new PlanningApiException("AI Tunnel доступен, но список моделей пуст.", errorCode: "LM_STUDIO_MODELS_EMPTY");
 
             if (string.IsNullOrWhiteSpace(configuredModel))
-                throw new PlanningApiException("Не задана модель LM Studio.", errorCode: "LM_STUDIO_MODEL_REQUIRED");
+                throw new PlanningApiException("Не задана модель AI Tunnel.", errorCode: "LM_STUDIO_MODEL_REQUIRED");
 
             if (modelIds.Any(id => string.Equals(id, configuredModel, StringComparison.OrdinalIgnoreCase)))
                 return;
 
             throw new PlanningApiException(
-                $"LM Studio доступна, но модель '{configuredModel}' не найдена. Доступные модели: {string.Join(", ", modelIds)}.",
+                $"AI Tunnel доступен, но модель '{configuredModel}' не найдена. Доступные модели: {string.Join(", ", modelIds)}.",
                 errorCode: "LM_STUDIO_MODEL_NOT_LOADED");
         }
 
@@ -242,7 +295,7 @@ namespace RevitPlanningPlugin.Services.Api
             }
             catch (PlanningApiException ex) when (IsUnsupportedResponseFormatError(ex))
             {
-                PluginLogger.Warn("LM Studio не приняла response_format=json_object. Повторяем запрос без response_format.");
+                PluginLogger.Warn("AI Tunnel не принял response_format=json_object. Повторяем запрос без response_format.");
                 request.ResponseFormat = null;
                 body = JsonConvert.SerializeObject(request, new JsonSerializerSettings
                 {
@@ -266,7 +319,7 @@ namespace RevitPlanningPlugin.Services.Api
                 if (attempt > 0)
                 {
                     var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt - 1));
-                    PluginLogger.Debug($"LM Studio retry {attempt}/{maxRetries} через {delay.TotalSeconds}s");
+                    PluginLogger.Debug($"AI Tunnel retry {attempt}/{maxRetries} через {delay.TotalSeconds}s");
                     await Task.Delay(delay, ct);
                 }
 
@@ -290,25 +343,25 @@ namespace RevitPlanningPlugin.Services.Api
                         if (statusCode == 429 || statusCode >= 500)
                         {
                             lastException = new PlanningApiException(
-                                $"LM Studio HTTP {statusCode}: {TruncateBody(errorBody)}",
+                                $"AI Tunnel HTTP {statusCode}: {TruncateBody(errorBody)}",
                                 statusCode,
                                 "LM_STUDIO_HTTP_ERROR");
                             continue;
                         }
 
                         throw new PlanningApiException(
-                            $"LM Studio HTTP {statusCode}: {TruncateBody(errorBody)}",
+                            $"AI Tunnel HTTP {statusCode}: {TruncateBody(errorBody)}",
                             statusCode,
                             "LM_STUDIO_HTTP_ERROR");
                     }
 
                     var content = await response.Content.ReadAsStringAsync();
                     if (string.IsNullOrWhiteSpace(content))
-                        throw new PlanningApiException("Пустой ответ от LM Studio.", errorCode: "LM_STUDIO_EMPTY_RESPONSE");
+                        throw new PlanningApiException("Пустой ответ от AI Tunnel.", errorCode: "LM_STUDIO_EMPTY_RESPONSE");
 
                     var result = JsonConvert.DeserializeObject<T>(content);
                     if (result == null)
-                        throw new PlanningApiException("Невалидный JSON от LM Studio.", errorCode: "LM_STUDIO_INVALID_JSON");
+                        throw new PlanningApiException("Невалидный JSON от AI Tunnel.", errorCode: "LM_STUDIO_INVALID_JSON");
 
                     return result;
                 }
@@ -323,17 +376,17 @@ namespace RevitPlanningPlugin.Services.Api
                 }
                 catch (JsonException ex)
                 {
-                    throw new PlanningApiException("Невалидный JSON от LM Studio.", errorCode: "LM_STUDIO_INVALID_JSON", inner: ex);
+                    throw new PlanningApiException("Невалидный JSON от AI Tunnel.", errorCode: "LM_STUDIO_INVALID_JSON", inner: ex);
                 }
                 catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
                 {
-                    lastException = new PlanningApiException("Таймаут запроса к LM Studio.", errorCode: "LM_STUDIO_TIMEOUT", inner: ex);
+                    lastException = new PlanningApiException("Таймаут запроса к AI Tunnel.", errorCode: "LM_STUDIO_TIMEOUT", inner: ex);
                     if (attempt == maxRetries) throw lastException;
                     continue;
                 }
                 catch (HttpRequestException ex)
                 {
-                    lastException = new PlanningApiException("Сетевая ошибка LM Studio.", errorCode: "LM_STUDIO_NETWORK_ERROR", inner: ex);
+                    lastException = new PlanningApiException("Сетевая ошибка AI Tunnel.", errorCode: "LM_STUDIO_NETWORK_ERROR", inner: ex);
                     if (attempt == maxRetries) throw lastException;
                     continue;
                 }
@@ -344,17 +397,17 @@ namespace RevitPlanningPlugin.Services.Api
                 }
             }
 
-            throw lastException ?? new PlanningApiException("Неизвестная ошибка LM Studio.", errorCode: "LM_STUDIO_UNKNOWN_ERROR");
+            throw lastException ?? new PlanningApiException("Неизвестная ошибка AI Tunnel.", errorCode: "LM_STUDIO_UNKNOWN_ERROR");
         }
 
         private static void EnsureSuccess<T>(ApiResponse<T>? response)
         {
             if (response == null)
-                throw new PlanningApiException("Нулевой JSON-конверт от LM Studio.", errorCode: "LM_STUDIO_NULL_ENVELOPE");
+                throw new PlanningApiException("Нулевой JSON-конверт от AI Tunnel.", errorCode: "LM_STUDIO_NULL_ENVELOPE");
             if (!response.Success && response.Error != null)
                 throw new PlanningApiException(response.Error.Message, errorCode: response.Error.Code);
             if (!response.Success)
-                throw new PlanningApiException("LM Studio вернула success=false без описания ошибки.", errorCode: "LM_STUDIO_API_ERROR");
+                throw new PlanningApiException("AI Tunnel вернул success=false без описания ошибки.", errorCode: "LM_STUDIO_API_ERROR");
         }
 
         private Uri BuildUri(string path)

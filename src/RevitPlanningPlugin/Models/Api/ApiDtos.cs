@@ -56,9 +56,11 @@ namespace RevitPlanningPlugin.Models.Api
     public class ApiGenerationRequestDto
     {
         [JsonProperty("request_id")] public string? RequestId { get; set; }
+        [JsonProperty("generation_nonce")] public string? GenerationNonce { get; set; }
         [JsonProperty("contour_id")] public string ContourId { get; set; } = string.Empty;
         [JsonProperty("variant_count")] public int VariantCount { get; set; } = 3;
         [JsonProperty("generation_type")] public string? GenerationType { get; set; }
+        [JsonProperty("planning_detail_mode")] public string? PlanningDetailMode { get; set; }
         [JsonProperty("validation_mode")] public string? ValidationMode { get; set; }
         [JsonProperty("text_prompt")] public string? TextPrompt { get; set; }
         [JsonProperty("llm_prompt")] public string? LlmPrompt { get; set; }
@@ -74,6 +76,9 @@ namespace RevitPlanningPlugin.Models.Api
 
         /// <summary>Максимальная площадь квартиры, м².</summary>
         [JsonProperty("max_apartment_area")] public double? MaxApartmentArea { get; set; }
+
+        /// <summary>Максимальная площадь по типам квартир, м²: Studio/OneRoom/TwoRoom/ThreeRoom/FourRoom -> площадь.</summary>
+        [JsonProperty("max_apartment_area_by_type")] public Dictionary<string, double>? MaxApartmentAreaByType { get; set; }
 
         // ——— Параметры МОП ———
 
@@ -192,7 +197,7 @@ namespace RevitPlanningPlugin.Models.Api
     }
 
     // ——————————————————————————————————————————————
-    //  OpenAI-compatible DTO для локальной LM Studio
+    //  OpenAI-compatible DTO для AI Tunnel / chat completions
     // ——————————————————————————————————————————————
 
     public class LmStudioChatRequestDto
@@ -200,7 +205,7 @@ namespace RevitPlanningPlugin.Models.Api
         [JsonProperty("model")] public string Model { get; set; } = string.Empty;
         [JsonProperty("messages")] public List<LmStudioChatMessageDto> Messages { get; set; } = new();
         [JsonProperty("temperature")] public double Temperature { get; set; } = 0.2;
-        [JsonProperty("max_tokens")] public int MaxTokens { get; set; } = 8192;
+        [JsonProperty("max_tokens")] public int MaxTokens { get; set; } = 12000;
         [JsonProperty("stream")] public bool Stream { get; set; }
         [JsonProperty("response_format", NullValueHandling = NullValueHandling.Ignore)]
         public LmStudioResponseFormatDto? ResponseFormat { get; set; } = new();

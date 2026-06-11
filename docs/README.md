@@ -28,10 +28,10 @@ Revit-плагин для получения архитектурных конт
 - В API-запросе передаётся `apartment_types` (словарь тип → количество),
   `min_apartment_area`, `max_apartment_area`.
 
-### Production-интеграция с LM Studio
-- Основной backend генерации — `LmStudio`, локальный OpenAI-compatible сервер LM Studio.
-- Значения по умолчанию: `http://localhost:1234/v1`, модель `google/gemma-4-e4b`.
-- Production-дефолты рассчитаны на локальную Gemma: `temperature = 0.1`, `max_tokens = 12000`, таймаут HTTP-запроса `180 с`.
+### Production-интеграция с AI Tunnel
+- Основной backend генерации — OpenAI-compatible API AI Tunnel.
+- Значения по умолчанию: `https://api.aitunnel.ru/v1`, модель `gemma-4-31b-it`.
+- Production-дефолты: `temperature = 0.1`, `max_tokens = 12000`, таймаут HTTP-запроса `180 с`.
 - Плагин отправляет Revit-контекст в `/v1/chat/completions`, получает JSON, извлекает структурированный объект даже из ответа с markdown/reasoning-префиксом и блокирует результат, если DTO-контракт нарушен.
 
 ### Mock-режим (режим без реального API)
@@ -117,12 +117,12 @@ src/RevitPlanningPlugin/
 ├── Services/
 │   ├── Api/
 │   │   ├── PlanningApiClient.cs        # REST-клиент с retry и авторизацией
-│   │   ├── LmStudioPlanningApiClient.cs # локальная LM Studio/Gemma через /v1/chat/completions
+│   │   ├── LmStudioPlanningApiClient.cs # AI Tunnel/OpenAI-compatible /v1/chat/completions
 │   │   ├── MockPlanningApiClient.cs    # Mock с квартирами и МОП-зонами
 │   │   ├── ApiResponseContractValidator.cs # строгая проверка JSON-ответа
 │   │   └── DtoMapper.cs               # DTO ↔ Domain (+ новые поля)
 │   ├── Configuration/
-│   │   └── ConfigurationService.cs    # backend, LM Studio, External API и Mock settings
+│   │   └── ConfigurationService.cs    # backend, AI Tunnel, External API и Mock settings
 │   ├── Geometry/
 │   │   ├── ContourValidator.cs
 │   │   ├── GenerationInputValidator.cs
@@ -192,14 +192,14 @@ src/RevitPlanningPlugin/
 
 | Параметр         | Описание                                                      |
 |------------------|---------------------------------------------------------------|
-| Backend          | `LmStudio`, `ExternalApi` или `Mock`                          |
-| LM Studio URL    | OpenAI-compatible URL локального LM Studio, обычно `http://localhost:1234/v1` |
-| LM Studio model  | Имя загруженной модели в LM Studio, например `google/gemma-4-e4b` |
+| Backend          | `LmStudio` (AI Tunnel), `ExternalApi` или `Mock`               |
+| AI Tunnel URL    | OpenAI-compatible URL, обычно `https://api.aitunnel.ru/v1`     |
+| AI model         | Имя модели AI Tunnel, по умолчанию `gemma-4-31b-it`     |
 | External API URL | Базовый URL внешнего REST API                                 |
 | Окружение        | dev / stage / prod                                            |
 | API Key          | Ключ доступа (хранится зашифрованно через DPAPI)              |
 | Bearer Token     | OAuth-токен (хранится зашифрованно)                           |
-| Таймаут (сек)    | Таймаут HTTP-запросов (по умолчанию 180 с для LM Studio)      |
+| Таймаут (сек)    | Таймаут HTTP-запросов (по умолчанию 180 с)                    |
 | Mock-сценарий    | HappyPath / GenerationError / Hallucination                   |
 
 Настройки: `%AppData%\RevitPlanningPlugin\settings.json`
@@ -209,7 +209,7 @@ src/RevitPlanningPlugin/
 ## Пользовательский сценарий
 
 ### Базовый сценарий
-1. **Подключение** — выберите backend. Для production с локальной LLM используйте `LmStudio`, запущенный сервер LM Studio и загруженную модель `google/gemma-4-e4b`.
+1. **Подключение** — выберите backend `LmStudio` (в UI отображается как AI Tunnel), URL `https://api.aitunnel.ru/v1`, модель `gemma-4-31b-it` или другую доступную модель AI Tunnel, затем введите API key.
 2. **Контур** — загрузите список из API или выделите замкнутые линии/стены в Revit и извлеките контур из модели.
 3. **Генерация** — задайте:
    - Тип генерации
@@ -235,7 +235,7 @@ src/RevitPlanningPlugin/
 
 Плагин поддерживает два production-контура интеграции:
 
-- `LmStudio`: локальный OpenAI-compatible `/v1/chat/completions`, где LLM возвращает тот же JSON-конверт результата.
+- `LmStudio`: AI Tunnel/OpenAI-compatible `/v1/chat/completions`, где модель возвращает тот же JSON-конверт результата.
 - `ExternalApi`: внешний REST/JSON сервис с эндпоинтами ниже.
 
 REST/JSON ExternalApi:
@@ -256,6 +256,7 @@ REST/JSON ExternalApi:
   "apartment_types": { "Studio": 2, "OneRoom": 4, "TwoRoom": 6, "ThreeRoom": 2 },
   "min_apartment_area": 25.0,
   "max_apartment_area": 120.0,
+  "max_apartment_area_by_type": { "Studio": 35.0, "OneRoom": 45.0, "TwoRoom": 70.0, "ThreeRoom": 95.0 },
   "mop_area_target": 80.0,
   "min_corridor_width": 1.4,
   "optimization_priority": "efficiency"
@@ -291,7 +292,7 @@ REST/JSON ExternalApi:
 - Весь трафик — по HTTPS.
 - PasswordBox не использует binding (WPF security) — значения передаются через `PasswordChanged`.
 - Пользовательский prompt передается как проектные требования и изолируется от инструкций, которые могут менять JSON-контракт или правила валидации.
-- Ответ AI-сервиса, включая локальную LM Studio/Gemma, не применяется напрямую: сначала извлекается JSON, проверяется DTO-контракт, затем доменная геометрия и состав помещений.
+- Ответ AI-сервиса не применяется напрямую: сначала извлекается JSON, проверяется DTO-контракт, затем доменная геометрия и состав помещений.
 
 ---
 

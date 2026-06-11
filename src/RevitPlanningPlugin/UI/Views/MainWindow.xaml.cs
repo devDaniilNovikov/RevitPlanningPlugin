@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using Autodesk.Revit.UI;
+using RevitPlanningPlugin.Revit.ExternalEvents;
 using RevitPlanningPlugin.UI.ViewModels;
 
 namespace RevitPlanningPlugin.UI.Views
@@ -8,16 +9,19 @@ namespace RevitPlanningPlugin.UI.Views
     public partial class MainWindow : Window
     {
         private MainViewModel _viewModel = null!;
+        private readonly RevitExternalEventRunner _revitRunner;
 
         public MainWindow(ExternalCommandData commandData)
         {
             InitializeComponent();
-            _viewModel = new MainViewModel(commandData);
+            _revitRunner = new RevitExternalEventRunner();
+            _viewModel = new MainViewModel(commandData, _revitRunner);
             DataContext = _viewModel;
 
             // Инициализируем PasswordBox из сохранённых настроек (DPAPI-расшифрованные)
             ApiKeyBox.Password      = _viewModel.Settings.ApiKey;
             BearerTokenBox.Password = _viewModel.Settings.BearerToken;
+            Closed += (_, _) => _revitRunner.Dispose();
         }
 
         /// <summary>

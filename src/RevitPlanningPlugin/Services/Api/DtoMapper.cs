@@ -59,20 +59,23 @@ namespace RevitPlanningPlugin.Services.Api
 
         public static ApiGenerationRequestDto ToDto(string contourId, GenerationParameters parameters)
         {
+            var apartmentTypes = parameters.GetEffectiveApartmentTypeRequirements();
             var dto = new ApiGenerationRequestDto
             {
                 ContourId = contourId,
                 VariantCount = parameters.VariantCount,
                 GenerationType = parameters.GenerationType.ToString(),
+                PlanningDetailMode = parameters.PlanningDetailMode.ToString(),
                 ValidationMode = parameters.ValidationMode.ToString(),
                 TextPrompt = string.IsNullOrWhiteSpace(parameters.TextPrompt) ? null : parameters.TextPrompt,
 
                 // Квартиры
-                ApartmentTypes = parameters.GetApartmentTypeRequirements(),
+                ApartmentTypes = apartmentTypes,
                 MinApartmentArea = parameters.MinApartmentArea > 0
                     ? parameters.MinApartmentArea : (double?)null,
                 MaxApartmentArea = parameters.MaxApartmentArea > 0
                     ? parameters.MaxApartmentArea : (double?)null,
+                MaxApartmentAreaByType = parameters.GetApartmentTypeMaxAreaOverrides(),
 
                 // МОП
                 MopAreaTarget = parameters.MopAreaTarget > 0
@@ -81,7 +84,7 @@ namespace RevitPlanningPlugin.Services.Api
                     ? parameters.MinCorridorWidth : (double?)null,
 
                 // Общие
-                RoomTypes = parameters.RequiredRoomTypes?.Select(r => r.ToString()).ToList(),
+                RoomTypes = parameters.GetEffectiveRequiredRoomTypes().Select(r => r.ToString()).ToList(),
                 MinRoomArea = parameters.MinRoomArea > 0
                     ? parameters.MinRoomArea : (double?)null,
                 MaxRoomArea = parameters.MaxRoomArea > 0
@@ -94,6 +97,9 @@ namespace RevitPlanningPlugin.Services.Api
             if (dto.ApartmentTypes?.Count == 0)
                 dto.ApartmentTypes = null;
 
+            if (dto.MaxApartmentAreaByType?.Count == 0)
+                dto.MaxApartmentAreaByType = null;
+
             return dto;
         }
 
@@ -101,6 +107,7 @@ namespace RevitPlanningPlugin.Services.Api
         {
             var dto = ToDto(context.Contour.Id, context.Parameters);
             dto.RequestId = string.IsNullOrWhiteSpace(context.RequestId) ? null : context.RequestId;
+            dto.GenerationNonce = string.IsNullOrWhiteSpace(context.GenerationNonce) ? null : context.GenerationNonce;
             dto.LlmPrompt = string.IsNullOrWhiteSpace(context.Prompt) ? null : context.Prompt;
             dto.Context = new ApiGenerationContextDto
             {

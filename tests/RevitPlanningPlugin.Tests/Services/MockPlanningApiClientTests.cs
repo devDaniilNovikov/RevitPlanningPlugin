@@ -180,6 +180,70 @@ namespace RevitPlanningPlugin.Tests.Services
         }
 
         [Fact]
+        public async Task GenerateLayoutsAsync_FloorLayout_ApartmentShellsHaveApartmentIds()
+        {
+            var parms = new GenerationParameters
+            {
+                VariantCount = 1,
+                PlanningDetailMode = PlanningDetailMode.FloorLayout
+            };
+
+            var variants = await _client.GenerateLayoutsAsync("demo-rect", parms);
+            var apartmentRooms = variants[0].Rooms
+                .Where(r => r.Properties.ContainsKey("apartment_type"))
+                .ToList();
+
+            Assert.NotEmpty(apartmentRooms);
+            Assert.All(apartmentRooms, room =>
+            {
+                Assert.Equal(RoomType.LivingRoom, room.Type);
+                Assert.True(room.Properties.ContainsKey("apartment_id"));
+            });
+        }
+
+        [Fact]
+        public async Task GenerateLayoutsAsync_ApartmentRooms_ReturnsOneApartmentWithoutFloorMop()
+        {
+            var parms = new GenerationParameters
+            {
+                VariantCount = 1,
+                PlanningDetailMode = PlanningDetailMode.ApartmentRooms,
+                OneRoomCount = 0,
+                TwoRoomCount = 1,
+                ThreeRoomCount = 0,
+                MaxApartmentArea = 1000,
+                RequiredRoomTypes = new List<RoomType>
+                {
+                    RoomType.LivingRoom,
+                    RoomType.Bedroom,
+                    RoomType.Kitchen,
+                    RoomType.Bathroom,
+                    RoomType.CommonArea
+                },
+                ValidationMode = ValidationMode.Strict
+            };
+            var contour = await _client.GetContourAsync("demo-rect");
+
+            var variants = await _client.GenerateLayoutsAsync("demo-rect", parms);
+            var variant = variants[0];
+            var result = new LayoutVariantValidator().Validate(variants, parms, contour);
+
+            Assert.True(result.IsValid, string.Join("; ", result.Issues.Select(i => $"{i.Code}: {i.Message}")));
+            Assert.Equal(1, variant.ApartmentCount);
+            Assert.Equal(1, variant.ApartmentTypeDistribution["TwoRoom"]);
+            Assert.Equal(0, variant.MopArea);
+            Assert.DoesNotContain(variant.Rooms, r => r.Type == RoomType.CommonArea
+                                                     || r.Type == RoomType.Lobby
+                                                     || r.Type == RoomType.Elevator
+                                                     || r.Type == RoomType.Staircase);
+            Assert.All(variant.Rooms, room =>
+            {
+                Assert.Equal("apt_1", room.Properties["apartment_id"]);
+                Assert.Equal("TwoRoom", room.Properties["apartment_type"]);
+            });
+        }
+
+        [Fact]
         public async Task GenerateLayoutsAsync_VariantIndex_StartsAtOne()
         {
             var parms = new GenerationParameters { VariantCount = 3 };
@@ -261,6 +325,153 @@ namespace RevitPlanningPlugin.Tests.Services
             var variantsB = await _client.GenerateLayoutsAsync(contextB);
 
             Assert.NotEqual(GetGeometryFingerprint(variantsA[0]), GetGeometryFingerprint(variantsB[0]));
+        }
+
+        [Fact]
+        public async Task GenerateLayoutsAsync_MockContextChangesWhenPromptChanges()
+        {
+            var contour = await _client.GetContourAsync("demo-rect");
+            var contextA = MakeContext(contour, new GenerationParameters
+            {
+                VariantCount = 1,
+                TextPrompt = "Компактный центральный МОП.",
+                OneRoomCount = 2,
+                TwoRoomCount = 1,
+                ThreeRoomCount = 0
+            });
+            var contextB = MakeContext(contour, new GenerationParameters
+            {
+                VariantCount = 1,
+                TextPrompt = "Разнеси квартиры по периметру и увеличь общий холл.",
+                OneRoomCount = 2,
+                TwoRoomCount = 1,
+                ThreeRoomCount = 0
+            });
+
+            var variantsA = await _client.GenerateLayoutsAsync(contextA);
+            var variantsB = await _client.GenerateLayoutsAsync(contextB);
+
+            Assert.Equal("Mock", variantsA[0].Metadata["generation_backend"]);
+            Assert.NotEqual(
+                variantsA[0].Metadata["mock_parameter_sensitive_seed"],
+                variantsB[0].Metadata["mock_parameter_sensitive_seed"]);
+        }
+
+        [Fact]
+        public async Task GenerateLayoutsAsync_MockContextChangesWhenBuiltPromptChanges()
+        {
+            var contour = await _client.GetContourAsync("demo-rect");
+            var parameters = new GenerationParameters
+            {
+                VariantCount = 1,
+                TextPrompt = "Одинаковый пользовательский prompt.",
+                OneRoomCount = 2,
+                TwoRoomCount = 1,
+                ThreeRoomCount = 0
+            };
+            var contextA = MakeContext(contour, parameters);
+            contextA.Prompt = "Полный prompt A";
+            var contextB = MakeContext(contour, parameters);
+            contextB.Prompt = "Полный prompt B";
+
+            var variantsA = await _client.GenerateLayoutsAsync(contextA);
+            var variantsB = await _client.GenerateLayoutsAsync(contextB);
+
+            Assert.NotEqual(
+                variantsA[0].Metadata["mock_parameter_sensitive_seed"],
+                variantsB[0].Metadata["mock_parameter_sensitive_seed"]);
+        }
+
+        [Fact]
+        public async Task GenerateLayoutsAsync_MockContextChangesWhenApartmentParametersChange()
+        {
+            var contour = await _client.GetContourAsync("demo-rect");
+            var contextA = MakeContext(contour, new GenerationParameters
+            {
+                VariantCount = 1,
+                TextPrompt = "Компактный центральный МОП.",
+                OneRoomCount = 1,
+                TwoRoomCount = 1,
+                ThreeRoomCount = 0
+            });
+            var contextB = MakeContext(contour, new GenerationParameters
+            {
+                VariantCount = 1,
+                TextPrompt = "Компактный центральный МОП.",
+                OneRoomCount = 3,
+                TwoRoomCount = 0,
+                ThreeRoomCount = 0
+            });
+
+            var variantsA = await _client.GenerateLayoutsAsync(contextA);
+            var variantsB = await _client.GenerateLayoutsAsync(contextB);
+
+            Assert.NotEqual(
+                variantsA[0].Metadata["mock_parameter_sensitive_seed"],
+                variantsB[0].Metadata["mock_parameter_sensitive_seed"]);
+            Assert.NotEqual(GetGeometryFingerprint(variantsA[0]), GetGeometryFingerprint(variantsB[0]));
+        }
+
+        [Fact]
+        public async Task GenerateLayoutsAsync_MockContextIgnoresSecretCustomParametersInSeed()
+        {
+            var contour = await _client.GetContourAsync("demo-rect");
+            var parametersA = new GenerationParameters
+            {
+                VariantCount = 1,
+                TextPrompt = "Компактный центральный МОП.",
+                CustomParameters = new Dictionary<string, string>
+                {
+                    ["api_key"] = "SECRET_ONE",
+                    ["access_key"] = "ACCESS_ONE",
+                    ["Authorization"] = "Bearer ONE",
+                    ["token"] = "TOKEN_ONE",
+                    ["design_note"] = "same"
+                }
+            };
+            var parametersB = new GenerationParameters
+            {
+                VariantCount = 1,
+                TextPrompt = "Компактный центральный МОП.",
+                CustomParameters = new Dictionary<string, string>
+                {
+                    ["api_key"] = "SECRET_TWO",
+                    ["access_key"] = "ACCESS_TWO",
+                    ["Authorization"] = "Bearer TWO",
+                    ["token"] = "TOKEN_TWO",
+                    ["design_note"] = "same"
+                }
+            };
+            var contextA = MakeContext(contour, parametersA);
+            contextA.Prompt = "same built prompt";
+            var contextB = MakeContext(contour, parametersB);
+            contextB.Prompt = "same built prompt";
+
+            var variantsA = await _client.GenerateLayoutsAsync(contextA);
+            var variantsB = await _client.GenerateLayoutsAsync(contextB);
+
+            Assert.Equal(
+                variantsA[0].Metadata["mock_parameter_sensitive_seed"],
+                variantsB[0].Metadata["mock_parameter_sensitive_seed"]);
+            Assert.Equal(GetGeometryFingerprint(variantsA[0]), GetGeometryFingerprint(variantsB[0]));
+        }
+
+        [Fact]
+        public async Task GenerateLayoutsAsync_MockContextAllowsNullCustomParameters()
+        {
+            var contour = await _client.GetContourAsync("demo-rect");
+            var parameters = new GenerationParameters
+            {
+                VariantCount = 1,
+                TextPrompt = "Компактный центральный МОП.",
+                CustomParameters = null!
+            };
+            var context = MakeContext(contour, parameters);
+
+            var variants = await _client.GenerateLayoutsAsync(context);
+
+            Assert.Single(variants);
+            Assert.True(variants[0].Metadata.ContainsKey("mock_parameter_sensitive_seed"));
         }
 
         [Fact]
@@ -363,6 +574,32 @@ namespace RevitPlanningPlugin.Tests.Services
                     var y = r.LabelPoint != null ? r.LabelPoint.Y : 0;
                     return $"{r.Type}:{x:F1}:{y:F1}:{r.Area:F1}";
                 }));
+        }
+
+        private static GenerationRequestContext MakeContext(BuildingContour contour, GenerationParameters parameters)
+        {
+            return new GenerationRequestContext
+            {
+                Contour = contour,
+                Parameters = parameters,
+                ProjectContext = new RevitProjectContext
+                {
+                    DocumentTitle = "Plan",
+                    ActiveViewName = "Level 2",
+                    LevelName = "Level 2",
+                    ContourSource = "revit_selection",
+                    ExistingElements = new List<RevitModelElementContext>
+                    {
+                        new()
+                        {
+                            ElementId = "101",
+                            Category = "Walls",
+                            Name = "Existing wall",
+                            ElementType = "Basic Wall"
+                        }
+                    }
+                }
+            };
         }
     }
 }

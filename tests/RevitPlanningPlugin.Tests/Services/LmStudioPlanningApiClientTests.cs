@@ -62,11 +62,11 @@ namespace RevitPlanningPlugin.Tests.Services
             {
                 Data =
                 {
-                    new LmStudioModelDto { Id = "google/gemma-4-e4b" }
+                    new LmStudioModelDto { Id = "gemma-4-31b-it" }
                 }
             };
 
-            LmStudioPlanningApiClient.EnsureModelAvailable(models, "GOOGLE/GEMMA-4-E4B");
+            LmStudioPlanningApiClient.EnsureModelAvailable(models, "GEMMA-4-31B-IT");
         }
 
         [Fact]
@@ -81,10 +81,36 @@ namespace RevitPlanningPlugin.Tests.Services
             };
 
             var exception = Assert.Throws<PlanningApiException>(
-                () => LmStudioPlanningApiClient.EnsureModelAvailable(models, "google/gemma-4-e4b"));
+                () => LmStudioPlanningApiClient.EnsureModelAvailable(models, "gemma-4-31b-it"));
 
             Assert.Equal("LM_STUDIO_MODEL_NOT_LOADED", exception.ErrorCode);
             Assert.Contains("loaded-model", exception.Message);
+        }
+
+        [Theory]
+        [InlineData("tok", "tok")]
+        [InlineData(" Bearer tok ", "tok")]
+        [InlineData("Authorization: Bearer tok", "tok")]
+        [InlineData("\"Authorization: Bearer tok\"", "tok")]
+        [InlineData("'Bearer tok'", "tok")]
+        [InlineData("-H \"Authorization: Bearer tok\"", "tok")]
+        [InlineData("Authorization:\r\n Bearer tok", "tok")]
+        public void NormalizeBearerToken_StripsHeaderSyntax(string input, string expected)
+        {
+            var token = LmStudioPlanningApiClient.NormalizeBearerToken(input);
+
+            Assert.Equal(expected, token);
+        }
+
+        [Fact]
+        public void CreateBearerAuthenticationHeader_UsesNormalizedToken()
+        {
+            var header = LmStudioPlanningApiClient.CreateBearerAuthenticationHeader(
+                "Authorization: Bearer tok");
+
+            Assert.NotNull(header);
+            Assert.Equal("Bearer", header!.Scheme);
+            Assert.Equal("tok", header.Parameter);
         }
     }
 }

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using RevitPlanningPlugin.Models.Api;
 using RevitPlanningPlugin.Models.Domain;
 using RevitPlanningPlugin.Models.Enums;
+using RevitPlanningPlugin.Services.Diagnostics;
 using RevitPlanningPlugin.Services.Logging;
 
 namespace RevitPlanningPlugin.Services.Api
@@ -90,6 +91,7 @@ namespace RevitPlanningPlugin.Services.Api
             }
 
             ApplyMockScenario(variants, contour);
+            AnnotateMockVariants(variants, contextSeed: 0);
             PluginLogger.Info($"[Mock] Генерация → {variants.Count} вариантов для '{contourId}' за {delay}ms, сценарий {_scenario}");
             return variants;
         }
@@ -115,6 +117,7 @@ namespace RevitPlanningPlugin.Services.Api
             }
 
             ApplyMockScenario(variants, contour);
+            AnnotateMockVariants(variants, contextSeed);
             PluginLogger.Info($"[Mock] Генерация из Revit-контекста → {variants.Count} вариантов, сценарий {_scenario}.");
             return variants;
         }
@@ -237,6 +240,18 @@ namespace RevitPlanningPlugin.Services.Api
             var partitions = new List<ContourSegment>();
             var geometryIndex = index + PositiveModulo(contextSeed, 17);
 
+            if (parms.PlanningDetailMode == PlanningDetailMode.ApartmentRooms)
+            {
+                return GenerateApartmentRoomsVariant(
+                    index,
+                    totalArea,
+                    parms,
+                    contextSeed,
+                    demoBounds,
+                    geometryIndex,
+                    rng);
+            }
+
             // ——— Квартиры: размещаются вокруг выбранной схемы МОП ———
             // Mock обязан быть применяемым в demo-сценарии: количество квартир
             // и квартирография соответствуют пользовательским параметрам.
@@ -298,13 +313,104 @@ namespace RevitPlanningPlugin.Services.Api
             return variant;
         }
 
+        private static LayoutVariant GenerateApartmentRoomsVariant(
+            int index,
+            double totalArea,
+            GenerationParameters parms,
+            int contextSeed,
+            DemoBounds bounds,
+            int geometryIndex,
+            Random rng)
+        {
+            var rooms = new List<RoomLayout>();
+            var partitions = new List<ContourSegment>();
+            var aptType = parms.GetPrimaryApartmentType();
+            const string apartmentId = "apt_1";
+
+            var minX = bounds.MinX;
+            var maxX = bounds.MaxX;
+            var minY = bounds.MinY;
+            var maxY = bounds.MaxY;
+            var width = maxX - minX;
+            var height = maxY - minY;
+
+            var serviceWidth = Math.Min(Math.Max(width * 0.32, 2.0), width * 0.45);
+            var serviceX0 = maxX - serviceWidth;
+            var kitchenSplitY = minY + height * 0.58;
+            AddPartition(partitions, serviceX0, minY, serviceX0, maxY);
+            AddPartition(partitions, serviceX0, kitchenSplitY, maxX, kitchenSplitY);
+
+            rooms.Add(MakeRoom($"apt_{index}_kitchen", "Кв. 1 кухня",
+                RoomType.Kitchen, serviceX0, minY, maxX, kitchenSplitY, aptType, apartmentId));
+            rooms.Add(MakeRoom($"apt_{index}_bathroom", "Кв. 1 санузел",
+                RoomType.Bathroom, serviceX0, kitchenSplitY, maxX, maxY, aptType, apartmentId));
+
+            var bedroomCount = aptType switch
+            {
+                "TwoRoom" => 1,
+                "ThreeRoom" => 2,
+                "FourRoom" => 3,
+                _ => 0
+            };
+
+            if (bedroomCount == 0)
+            {
+                rooms.Add(MakeRoom($"apt_{index}_living", "Кв. 1 жилая комната",
+                    RoomType.LivingRoom, minX, minY, serviceX0, maxY, aptType, apartmentId));
+            }
+            else
+            {
+                var bedroomBandY0 = minY + height * (0.52 + rng.NextDouble() * 0.06);
+                AddPartition(partitions, minX, bedroomBandY0, serviceX0, bedroomBandY0);
+                rooms.Add(MakeRoom($"apt_{index}_living", "Кв. 1 гостиная",
+                    RoomType.LivingRoom, minX, minY, serviceX0, bedroomBandY0, aptType, apartmentId));
+
+                var bedroomWidth = (serviceX0 - minX) / bedroomCount;
+                for (var i = 0; i < bedroomCount; i++)
+                {
+                    var x0 = minX + bedroomWidth * i;
+                    var x1 = i == bedroomCount - 1 ? serviceX0 : x0 + bedroomWidth;
+                    if (i > 0)
+                        AddPartition(partitions, x0, bedroomBandY0, x0, maxY);
+
+                    rooms.Add(MakeRoom($"apt_{index}_bedroom_{i + 1}", $"Кв. 1 спальня {i + 1}",
+                        RoomType.Bedroom, x0, bedroomBandY0, x1, maxY, aptType, apartmentId));
+                }
+            }
+
+            var usableArea = rooms.Sum(room => room.Area);
+            var score = 60 + rng.Next(0, 35);
+            return new LayoutVariant
+            {
+                Id = $"variant_{index}",
+                Name = $"Вариант {index + 1} (комнаты {ApartmentTypeLabel(aptType)})",
+                VariantIndex = index + 1,
+                Rooms = rooms,
+                Partitions = partitions,
+                TotalArea = totalArea,
+                UsableArea = usableArea,
+                MopArea = 0,
+                CorridorArea = 0,
+                RoomCount = rooms.Count,
+                ApartmentCount = 1,
+                ApartmentTypeDistribution = new Dictionary<string, int> { [aptType] = 1 },
+                EfficiencyScore = score,
+                Metadata =
+                {
+                    ["mock_layout_style"] = "apartment-rooms",
+                    ["mock_context_seed"] = contextSeed.ToString(CultureInfo.InvariantCulture),
+                    ["mock_geometry_index"] = geometryIndex.ToString(CultureInfo.InvariantCulture)
+                }
+            };
+        }
+
         // ═══════════════════════════════════════════
         //  Вспомогательные методы
         // ═══════════════════════════════════════════
 
         private static List<string> ExpandApartmentProgram(GenerationParameters parms)
         {
-            var requested = parms.GetApartmentTypeRequirements();
+            var requested = parms.GetEffectiveApartmentTypeRequirements();
             if (requested.Count == 0)
                 requested["OneRoom"] = 1;
 
@@ -347,6 +453,16 @@ namespace RevitPlanningPlugin.Services.Api
             variant.Metadata["mock_issue"] = "Помещение намеренно вынесено за выбранный контур для демонстрации валидации галлюцинации.";
         }
 
+        private void AnnotateMockVariants(List<LayoutVariant> variants, int contextSeed)
+        {
+            foreach (var variant in variants)
+            {
+                variant.Metadata["generation_backend"] = "Mock";
+                variant.Metadata["mock_scenario"] = _scenario.ToString();
+                variant.Metadata["mock_parameter_sensitive_seed"] = contextSeed.ToString(CultureInfo.InvariantCulture);
+            }
+        }
+
         private static int CalculateContextSeed(GenerationRequestContext context)
         {
             unchecked
@@ -358,8 +474,10 @@ namespace RevitPlanningPlugin.Services.Api
                 AddStableHash(ref hash, context.ProjectContext.ContourSource);
                 AddStableHash(ref hash, context.Contour.Id);
                 AddStableHash(ref hash, context.Contour.Name);
+                AddStableHash(ref hash, context.Prompt);
                 hash = hash * 31 + context.Contour.OuterLoop.Count;
                 hash = hash * 31 + context.ProjectContext.ExistingElements.Count;
+                AddGenerationParameterHash(ref hash, context.Parameters);
 
                 foreach (var element in context.ProjectContext.ExistingElements.OrderBy(e => e.ElementId).Take(80))
                 {
@@ -371,6 +489,44 @@ namespace RevitPlanningPlugin.Services.Api
                 }
 
                 return hash;
+            }
+        }
+
+        private static void AddGenerationParameterHash(ref int hash, GenerationParameters parameters)
+        {
+            AddStableHash(ref hash, parameters.GenerationType.ToString());
+            AddStableHash(ref hash, parameters.PlanningDetailMode.ToString());
+            AddStableHash(ref hash, parameters.ValidationMode.ToString());
+            AddStableHash(ref hash, parameters.TextPrompt);
+            AddStableHash(ref hash, parameters.VariantCount.ToString(CultureInfo.InvariantCulture));
+            AddStableHash(ref hash, parameters.StudioCount.ToString(CultureInfo.InvariantCulture));
+            AddStableHash(ref hash, parameters.OneRoomCount.ToString(CultureInfo.InvariantCulture));
+            AddStableHash(ref hash, parameters.TwoRoomCount.ToString(CultureInfo.InvariantCulture));
+            AddStableHash(ref hash, parameters.ThreeRoomCount.ToString(CultureInfo.InvariantCulture));
+            AddStableHash(ref hash, parameters.FourRoomCount.ToString(CultureInfo.InvariantCulture));
+            AddStableHash(ref hash, parameters.MinApartmentArea.ToString("G17", CultureInfo.InvariantCulture));
+            AddStableHash(ref hash, parameters.MaxApartmentArea.ToString("G17", CultureInfo.InvariantCulture));
+            AddStableHash(ref hash, parameters.StudioMaxApartmentArea.ToString("G17", CultureInfo.InvariantCulture));
+            AddStableHash(ref hash, parameters.OneRoomMaxApartmentArea.ToString("G17", CultureInfo.InvariantCulture));
+            AddStableHash(ref hash, parameters.TwoRoomMaxApartmentArea.ToString("G17", CultureInfo.InvariantCulture));
+            AddStableHash(ref hash, parameters.ThreeRoomMaxApartmentArea.ToString("G17", CultureInfo.InvariantCulture));
+            AddStableHash(ref hash, parameters.FourRoomMaxApartmentArea.ToString("G17", CultureInfo.InvariantCulture));
+            AddStableHash(ref hash, parameters.MopAreaTarget.ToString("G17", CultureInfo.InvariantCulture));
+            AddStableHash(ref hash, parameters.MinCorridorWidth.ToString("G17", CultureInfo.InvariantCulture));
+            AddStableHash(ref hash, parameters.MinRoomArea.ToString("G17", CultureInfo.InvariantCulture));
+            AddStableHash(ref hash, parameters.MaxRoomArea.ToString("G17", CultureInfo.InvariantCulture));
+            AddStableHash(ref hash, parameters.OptimizationPriority);
+
+            foreach (var roomType in parameters.GetEffectiveRequiredRoomTypes().OrderBy(t => t.ToString()))
+                AddStableHash(ref hash, roomType.ToString());
+
+            var customParameters = parameters.CustomParameters ?? new Dictionary<string, string>();
+            foreach (var customParameter in customParameters
+                         .Where(kv => !GenerationRequestDiagnostics.IsSecretKey(kv.Key))
+                         .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                AddStableHash(ref hash, customParameter.Key);
+                AddStableHash(ref hash, customParameter.Value);
             }
         }
 
@@ -763,6 +919,16 @@ namespace RevitPlanningPlugin.Services.Api
             return value;
         }
 
+        private static void AddPartition(List<ContourSegment> partitions, double x0, double y0, double x1, double y1)
+        {
+            partitions.Add(new ContourSegment
+            {
+                Type = SegmentType.Line,
+                Start = new Point2D(x0, y0),
+                End = new Point2D(x1, y1)
+            });
+        }
+
         private static string ApartmentTypeLabel(string type)
         {
             return type switch
@@ -951,7 +1117,7 @@ namespace RevitPlanningPlugin.Services.Api
         }
 
         private static RoomLayout MakeRoom(string id, string name, RoomType type,
-            double x0, double y0, double x1, double y1, string? aptType = null)
+            double x0, double y0, double x1, double y1, string? aptType = null, string? apartmentId = null)
         {
             double area = Math.Abs((x1 - x0) * (y1 - y0));
             var room = new RoomLayout
@@ -970,7 +1136,10 @@ namespace RevitPlanningPlugin.Services.Api
                 }
             };
             if (aptType != null)
+            {
+                room.Properties["apartment_id"] = apartmentId ?? id;
                 room.Properties["apartment_type"] = aptType;
+            }
             return room;
         }
 

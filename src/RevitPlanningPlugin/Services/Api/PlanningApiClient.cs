@@ -72,7 +72,7 @@ namespace RevitPlanningPlugin.Services.Api
             // Авторизация
             if (!string.IsNullOrWhiteSpace(_settings.BearerToken))
                 _http.DefaultRequestHeaders.Authorization =
-                    new AuthenticationHeaderValue("Bearer", _settings.BearerToken);
+                    LmStudioPlanningApiClient.CreateBearerAuthenticationHeader(_settings.BearerToken);
 
             if (!string.IsNullOrWhiteSpace(_settings.ApiKey))
                 _http.DefaultRequestHeaders.Add("X-API-Key", _settings.ApiKey);

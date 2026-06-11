@@ -232,12 +232,15 @@ namespace RevitPlanningPlugin.Tests.Services
             {
                 VariantCount = 5,
                 GenerationType = GenerationType.MixedUse,
+                PlanningDetailMode = PlanningDetailMode.FloorLayout,
                 ValidationMode = ValidationMode.Strict,
                 TextPrompt = "Сохранить компактные МОП.",
                 StudioCount = 2,
                 OneRoomCount = 4,
                 MinApartmentArea = 30,
                 MaxApartmentArea = 100,
+                StudioMaxApartmentArea = 35,
+                OneRoomMaxApartmentArea = 55,
                 MopAreaTarget = 50,
                 MinCorridorWidth = 1.8,
                 OptimizationPriority = "area"
@@ -248,14 +251,47 @@ namespace RevitPlanningPlugin.Tests.Services
             Assert.Equal("contour-1", dto.ContourId);
             Assert.Equal(5, dto.VariantCount);
             Assert.Equal("MixedUse", dto.GenerationType);
+            Assert.Equal("FloorLayout", dto.PlanningDetailMode);
             Assert.Equal("Strict", dto.ValidationMode);
             Assert.Equal("Сохранить компактные МОП.", dto.TextPrompt);
             Assert.Equal(2, dto.ApartmentTypes!["Studio"]);
             Assert.Equal(30.0, dto.MinApartmentArea);
             Assert.Equal(100.0, dto.MaxApartmentArea);
+            Assert.Equal(35.0, dto.MaxApartmentAreaByType!["Studio"]);
+            Assert.Equal(55.0, dto.MaxApartmentAreaByType["OneRoom"]);
             Assert.Equal(50.0, dto.MopAreaTarget);
             Assert.Equal(1.8, dto.MinCorridorWidth);
             Assert.Equal("area", dto.OptimizationPriority);
+        }
+
+        [Fact]
+        public void ToDto_ApartmentRooms_MapsOnePrimaryApartmentType()
+        {
+            var p = new GenerationParameters
+            {
+                PlanningDetailMode = PlanningDetailMode.ApartmentRooms,
+                StudioCount = 0,
+                OneRoomCount = 0,
+                TwoRoomCount = 3,
+                ThreeRoomCount = 2,
+                FourRoomCount = 0,
+                RequiredRoomTypes = new List<RoomType>
+                {
+                    RoomType.LivingRoom,
+                    RoomType.Bedroom,
+                    RoomType.Kitchen,
+                    RoomType.Bathroom,
+                    RoomType.CommonArea
+                }
+            };
+
+            var dto = DtoMapper.ToDto("c1", p);
+
+            Assert.Equal("ApartmentRooms", dto.PlanningDetailMode);
+            Assert.NotNull(dto.ApartmentTypes);
+            Assert.Single(dto.ApartmentTypes!);
+            Assert.Equal(1, dto.ApartmentTypes["TwoRoom"]);
+            Assert.Equal(new[] { "LivingRoom", "Bedroom", "Kitchen", "Bathroom" }, dto.RoomTypes);
         }
 
         [Fact]
@@ -286,6 +322,7 @@ namespace RevitPlanningPlugin.Tests.Services
 
             Assert.Null(dto.MinApartmentArea);
             Assert.Null(dto.MaxApartmentArea);
+            Assert.Null(dto.MaxApartmentAreaByType);
             Assert.Null(dto.MopAreaTarget);
             Assert.Null(dto.MinCorridorWidth);
         }
@@ -296,6 +333,7 @@ namespace RevitPlanningPlugin.Tests.Services
             var context = new GenerationRequestContext
             {
                 RequestId = "req-1",
+                GenerationNonce = "nonce-1",
                 Prompt = "Полный prompt",
                 Contour = new BuildingContour
                 {
@@ -339,6 +377,7 @@ namespace RevitPlanningPlugin.Tests.Services
             var dto = DtoMapper.ToDto(context);
 
             Assert.Equal("req-1", dto.RequestId);
+            Assert.Equal("nonce-1", dto.GenerationNonce);
             Assert.Equal("Полный prompt", dto.LlmPrompt);
             Assert.Equal("c1", dto.Context!.Contour!.Id);
             Assert.Equal("Project.rvt", dto.Context.RevitContext!.DocumentTitle);

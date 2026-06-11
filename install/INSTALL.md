@@ -55,13 +55,13 @@ C:\ProgramData\Autodesk\Revit\Addins\2022\
 
 1. Нажмите кнопку «Генератор планировок».
 2. Перейдите на вкладку «Подключение».
-3. Для production-режима выберите Backend = `LmStudio`.
-4. Запустите Local Server в LM Studio и загрузите `google/gemma-4-e4b`.
-5. Укажите LM Studio URL, обычно `http://localhost:1234/v1`, и имя модели так, как оно отображается в LM Studio.
-6. Оставьте production-дефолты: таймаут 180 секунд, модель `google/gemma-4-e4b`. Это важно для длинных локальных ответов Gemma.
+3. Для production-режима выберите Backend = `LmStudio` (в UI отображается как AI Tunnel).
+4. Укажите AI Tunnel URL: `https://api.aitunnel.ru/v1`.
+5. Укажите модель AI Tunnel, по умолчанию `gemma-4-31b-it`.
+6. Введите API key в поле «Ключ API». Ключ хранится локально через DPAPI и не должен попадать в репозиторий.
 7. Нажмите «Сохранить», затем «Проверить соединение».
 
-Если вместо локальной LLM используется внешний REST-сервис, выберите Backend = `ExternalApi`, укажите External API URL и при необходимости API Key или Bearer Token.
+Если используется отдельный REST-сервис с эндпоинтами `/health`, `/contours` и `/generate`, выберите Backend = `ExternalApi`, укажите External API URL и при необходимости API Key или Bearer Token.
 
 ## Удаление
 

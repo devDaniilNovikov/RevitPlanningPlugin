@@ -74,7 +74,7 @@ namespace RevitPlanningPlugin.UI.Converters
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
             => value switch
             {
-                GenerationBackend.LmStudio => "LM Studio (локальная LLM)",
+                GenerationBackend.LmStudio => "AI Tunnel",
                 GenerationBackend.ExternalApi => "Внешний API",
                 GenerationBackend.Mock => "Демо-режим",
 
@@ -86,6 +86,9 @@ namespace RevitPlanningPlugin.UI.Converters
                 GenerationType.Office => "Офисная планировка",
                 GenerationType.MixedUse => "Смешанное назначение",
                 GenerationType.Custom => "Пользовательский сценарий",
+
+                PlanningDetailMode.FloorLayout => "Планировка этажа",
+                PlanningDetailMode.ApartmentRooms => "Планировка квартиры",
 
                 ValidationMode.Off => "Без проверки",
                 ValidationMode.Advisory => "Предупреждения",

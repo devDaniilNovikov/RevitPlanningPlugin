@@ -63,7 +63,7 @@ namespace RevitPlanningPlugin.Tests.Services
                 OneRoomCount = 1,
                 TwoRoomCount = 0,
                 ThreeRoomCount = 0,
-                RequiredRoomTypes = new List<RoomType> { RoomType.Kitchen }
+                RequiredRoomTypes = new List<RoomType> { RoomType.Lobby }
             };
 
             var result = _validator.Validate(new[] { MakeVariant() }, parameters, MakeContour());
@@ -190,6 +190,44 @@ namespace RevitPlanningPlugin.Tests.Services
         }
 
         [Fact]
+        public void Validate_ApartmentRooms_DoesNotRequireMopAndAcceptsOneApartment()
+        {
+            var parameters = MakeStrictParameters();
+            parameters.PlanningDetailMode = PlanningDetailMode.ApartmentRooms;
+            parameters.OneRoomCount = 1;
+            parameters.RequiredRoomTypes = new List<RoomType>
+            {
+                RoomType.LivingRoom,
+                RoomType.Kitchen,
+                RoomType.Bathroom,
+                RoomType.CommonArea
+            };
+
+            var result = _validator.Validate(new[] { MakeApartmentRoomsVariant() }, parameters, MakeContour());
+
+            Assert.True(result.IsValid);
+            Assert.DoesNotContain(result.Issues, i => i.Code == "MOP_MISSING");
+            Assert.DoesNotContain(result.Issues, i => i.Code == "ROOM_TYPE_MISSING");
+            Assert.DoesNotContain(result.Issues, i => i.Code == "APARTMENT_COUNT_MISMATCH");
+        }
+
+        [Fact]
+        public void Validate_ApartmentRooms_TwoApartmentIds_ReturnsCountMismatch()
+        {
+            var parameters = MakeStrictParameters();
+            parameters.PlanningDetailMode = PlanningDetailMode.ApartmentRooms;
+            parameters.OneRoomCount = 1;
+
+            var variant = MakeApartmentRoomsVariant();
+            variant.Rooms.Add(MakeRoom("extra", RoomType.LivingRoom, 7, 0, 10, 3, "OneRoom", "apt_2"));
+
+            var result = _validator.Validate(new[] { variant }, parameters, MakeContour());
+
+            Assert.False(result.IsValid);
+            Assert.Contains(result.Issues, i => i.Code == "APARTMENT_COUNT_MISMATCH");
+        }
+
+        [Fact]
         public void Validate_StrictMode_TotalAreaContourMismatch_ReturnsWarningOnly()
         {
             var parameters = MakeStrictParameters();
@@ -202,6 +240,36 @@ namespace RevitPlanningPlugin.Tests.Services
             Assert.Contains(result.Issues,
                 i => i.Code == "TOTAL_AREA_CONTOUR_MISMATCH"
                      && i.Severity == ValidationSeverity.Warning);
+        }
+
+        [Fact]
+        public void Validate_OffMode_ApartmentAreaAboveMax_ReturnsError()
+        {
+            var parameters = MakeStrictParameters();
+            parameters.ValidationMode = ValidationMode.Off;
+            parameters.MaxApartmentArea = 10;
+
+            var result = _validator.Validate(new[] { MakeVariant() }, parameters, MakeContour());
+
+            Assert.False(result.IsValid);
+            Assert.Contains(result.Issues, i => i.Code == "APARTMENT_AREA_TOO_LARGE"
+                                               && i.Severity == ValidationSeverity.Error);
+            Assert.Contains(result.Issues, i => i.Code == "VALIDATION_OFF"
+                                               && i.Severity == ValidationSeverity.Info);
+        }
+
+        [Fact]
+        public void Validate_TypeSpecificApartmentAreaAboveMax_ReturnsError()
+        {
+            var parameters = MakeStrictParameters();
+            parameters.MaxApartmentArea = 120;
+            parameters.OneRoomMaxApartmentArea = 45;
+
+            var result = _validator.Validate(new[] { MakeVariant() }, parameters, MakeContour());
+
+            Assert.False(result.IsValid);
+            Assert.Contains(result.Issues, i => i.Code == "APARTMENT_AREA_TOO_LARGE"
+                                               && i.Message.Contains("45"));
         }
 
         private static LayoutVariant MakeVariant()
@@ -220,6 +288,28 @@ namespace RevitPlanningPlugin.Tests.Services
                 {
                     MakeRoom("apt1", RoomType.LivingRoom, 0, 0, 7, 10, "OneRoom"),
                     MakeRoom("mop1", RoomType.CommonArea, 7, 0, 10, 10)
+                }
+            };
+        }
+
+        private static LayoutVariant MakeApartmentRoomsVariant()
+        {
+            return new LayoutVariant
+            {
+                Id = "apt-rooms",
+                Name = "Квартира 1К",
+                VariantIndex = 1,
+                TotalArea = 100,
+                UsableArea = 42,
+                MopArea = 0,
+                CorridorArea = 0,
+                ApartmentCount = 1,
+                ApartmentTypeDistribution = new Dictionary<string, int> { ["OneRoom"] = 1 },
+                Rooms = new List<RoomLayout>
+                {
+                    MakeRoom("living", RoomType.LivingRoom, 0, 0, 4, 6, "OneRoom", "apt_1"),
+                    MakeRoom("kitchen", RoomType.Kitchen, 4, 0, 7, 3, "OneRoom", "apt_1"),
+                    MakeRoom("bathroom", RoomType.Bathroom, 4, 3, 7, 6, "OneRoom", "apt_1")
                 }
             };
         }

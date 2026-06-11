@@ -6,25 +6,27 @@
 |----------|----------|
 | Протокол | HTTPS |
 | Формат | REST / JSON |
-| Аутентификация | API Key (заголовок `X-API-Key`) или Bearer Token (`Authorization: Bearer <token>`) |
+| Аутентификация | AI Tunnel: Bearer Token (`Authorization: Bearer <AITUNNEL_API_KEY>`). ExternalApi: API Key (`X-API-Key`) или Bearer Token |
 | Content-Type | `application/json` |
 
-## Production-режим LM Studio
+## Production-режим AI Tunnel
 
-Для локальной LLM используется backend `LmStudio`. Он обращается к OpenAI-compatible API LM Studio:
+Для production-генерации используется OpenAI-compatible API AI Tunnel:
 
 | Параметр | Значение по умолчанию |
 |----------|------------------------|
-| Base URL | `http://localhost:1234/v1` |
+| Base URL | `https://api.aitunnel.ru/v1` |
 | Endpoint | `POST /chat/completions` |
-| Model | `google/gemma-4-e4b` или фактическое имя загруженной модели в LM Studio |
+| Полный URL генерации | `POST https://api.aitunnel.ru/v1/chat/completions` |
+| Полный URL проверки моделей | `GET https://api.aitunnel.ru/v1/models` |
+| Model | `gemma-4-31b-it` или другое имя модели из AI Tunnel |
 | Temperature | `0.1` |
 | Max tokens | `12000` |
 | Timeout | `180 с` |
 | JSON mode | `response_format.type = json_object` |
 
-Плагин отправляет в LM Studio `GenerationRequestContext`: Revit-контекст, контур, параметры генерации и полный `llm_prompt`.
-LM Studio должна вернуть в `choices[0].message.content` один JSON-объект в том же конверте результата, что описан ниже:
+Плагин отправляет в AI Tunnel `GenerationRequestContext`: Revit-контекст, контур, параметры генерации и полный `llm_prompt`.
+AI Tunnel должен вернуть в `choices[0].message.content` один JSON-объект в том же конверте результата, что описан ниже:
 
 ```json
 {
@@ -38,7 +40,7 @@ LM Studio должна вернуть в `choices[0].message.content` один J
 }
 ```
 
-Если локальная модель возвращает markdown-блок или reasoning-префикс, клиент извлекает первый JSON-объект, затем строго валидирует его через DTO-контракт. Ответ без JSON, с невалидным JSON или с нарушением схемы не применяется к Revit-модели.
+Если модель возвращает markdown-блок или reasoning-префикс, клиент извлекает первый JSON-объект, затем строго валидирует его через DTO-контракт. Ответ без JSON, с невалидным JSON или с нарушением схемы не применяется к Revit-модели.
 
 Backend `ExternalApi` использует REST-эндпоинты `/health`, `/contours`, `/contours/{id}`, `/generate`. Backend `Mock` оставлен только для тестов и демонстраций.
 
@@ -187,6 +189,13 @@ Backend `ExternalApi` использует REST-эндпоинты `/health`, `/
   },
   "min_apartment_area": 25.0,
   "max_apartment_area": 120.0,
+  "max_apartment_area_by_type": {
+    "Studio": 35.0,
+    "OneRoom": 45.0,
+    "TwoRoom": 70.0,
+    "ThreeRoom": 95.0,
+    "FourRoom": 120.0
+  },
   "mop_area_target": 80.0,
   "min_corridor_width": 1.2,
   "optimization_priority": "efficiency",
@@ -248,6 +257,9 @@ Backend `ExternalApi` использует REST-эндпоинты `/health`, `/
 | `text_prompt` | Пользовательский текстовый промпт. |
 | `llm_prompt` | Полный prompt, собранный плагином из параметров и Revit-контекста. Пользовательский текст внутри него трактуется как данные, а не как инструкция менять контракт ответа. |
 | `apartment_types` | Квартирография: тип квартиры -> количество. |
+| `min_apartment_area` | Общая минимальная площадь квартиры, м². |
+| `max_apartment_area` | Общая максимальная площадь квартиры, м². Используется для типов без отдельного лимита. |
+| `max_apartment_area_by_type` | Необязательные максимумы по типам квартир, м². Если тип указан здесь, его значение заменяет общий `max_apartment_area` для этого типа. |
 | `mop_area_target` | Целевая площадь МОП, м². Если отсутствует, сервис выбирает автоматически. |
 | `min_corridor_width` | Минимальная ширина коридоров МОП, м. |
 | `context.contour` | Полная геометрия контура в метрах. |

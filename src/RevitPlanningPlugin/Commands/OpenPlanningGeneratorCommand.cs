@@ -22,7 +22,7 @@ namespace RevitPlanningPlugin.Commands
                 PluginLogger.Info("Запуск команды генератора планировок.");
 
                 var window = new MainWindow(commandData);
-                window.ShowDialog();
+                window.Show();
 
                 return Result.Succeeded;
             }

@@ -22,15 +22,18 @@ namespace RevitPlanningPlugin.Services.Geometry
             var result = new ValidationResult();
             var list = variants?.ToList() ?? new List<LayoutVariant>();
 
-            if (parameters.ValidationMode == ValidationMode.Off)
+            if (list.Count == 0)
             {
-                result.AddInfo("Проверка результата отключена.", "VALIDATION_OFF");
+                result.AddError("AI-сервис не вернул ни одного варианта.", "NO_VARIANTS");
                 return result;
             }
 
-            if (list.Count == 0)
+            foreach (var variant in list)
+                ValidateApartmentUnitAreas(variant, parameters, result);
+
+            if (parameters.ValidationMode == ValidationMode.Off)
             {
-                AddByMode(result, parameters, "AI-сервис не вернул ни одного варианта.", "NO_VARIANTS");
+                result.AddInfo("Мягкая проверка результата отключена; явные лимиты площади квартир проверены.", "VALIDATION_OFF");
                 return result;
             }
 
@@ -72,6 +75,8 @@ namespace RevitPlanningPlugin.Services.Geometry
             ValidationResult result)
         {
             var requested = parameters.GetApartmentTypeRequirements();
+            if (parameters.PlanningDetailMode == PlanningDetailMode.ApartmentRooms)
+                requested = parameters.GetEffectiveApartmentTypeRequirements();
             if (requested.Count == 0) return;
             var actualProgram = GetActualApartmentProgram(variant);
             var distribution = actualProgram.Distribution;
@@ -87,10 +92,13 @@ namespace RevitPlanningPlugin.Services.Geometry
                 }
             }
 
-            if (actualProgram.Count != parameters.TotalApartmentsRequested)
+            var requiredCount = parameters.PlanningDetailMode == PlanningDetailMode.ApartmentRooms
+                ? 1
+                : parameters.TotalApartmentsRequested;
+            if (actualProgram.Count != requiredCount)
             {
                 AddByMode(result, parameters,
-                    $"Вариант '{variant.Name}': всего квартир {actualProgram.Count}, требуется {parameters.TotalApartmentsRequested}.",
+                    $"Вариант '{variant.Name}': всего квартир {actualProgram.Count}, требуется {requiredCount}.",
                     "APARTMENT_COUNT_MISMATCH");
             }
 
@@ -111,7 +119,7 @@ namespace RevitPlanningPlugin.Services.Geometry
             if (parameters.RequiredRoomTypes == null || parameters.RequiredRoomTypes.Count == 0)
                 return;
 
-            foreach (var roomType in parameters.RequiredRoomTypes.Distinct())
+            foreach (var roomType in parameters.GetEffectiveRequiredRoomTypes())
             {
                 if (variant.Rooms.Any(r => r.Type == roomType))
                     continue;
@@ -169,8 +177,6 @@ namespace RevitPlanningPlugin.Services.Geometry
                         maxCode);
                 }
             }
-
-            ValidateApartmentUnitAreas(variant, parameters, result);
         }
 
         private static bool ShouldApplyRoomAreaBounds(RoomLayout room)
@@ -194,6 +200,9 @@ namespace RevitPlanningPlugin.Services.Geometry
             GenerationParameters parameters,
             ValidationResult result)
         {
+            if (parameters.PlanningDetailMode == PlanningDetailMode.ApartmentRooms)
+                return;
+
             if (!variant.MopRooms.Any())
             {
                 AddByMode(result, parameters, $"Вариант '{variant.Name}' не содержит МОП.", "MOP_MISSING");
@@ -323,15 +332,16 @@ namespace RevitPlanningPlugin.Services.Geometry
             {
                 if (parameters.MinApartmentArea > 0 && apartment.area < parameters.MinApartmentArea)
                 {
-                    AddByMode(result, parameters,
+                    result.AddError(
                         $"Вариант '{variant.Name}', квартира '{apartment.id}': площадь {apartment.area:F1} м² меньше минимума {parameters.MinApartmentArea:F1} м².",
                         "APARTMENT_AREA_TOO_SMALL");
                 }
 
-                if (parameters.MaxApartmentArea > 0 && apartment.area > parameters.MaxApartmentArea)
+                var maxApartmentArea = parameters.GetMaxApartmentAreaForType(apartment.type);
+                if (maxApartmentArea > 0 && apartment.area > maxApartmentArea)
                 {
-                    AddByMode(result, parameters,
-                        $"Вариант '{variant.Name}', квартира '{apartment.id}': площадь {apartment.area:F1} м² больше максимума {parameters.MaxApartmentArea:F1} м².",
+                    result.AddError(
+                        $"Вариант '{variant.Name}', квартира '{apartment.id}': площадь {apartment.area:F1} м² больше максимума для типа {apartment.type} {maxApartmentArea:F1} м².",
                         "APARTMENT_AREA_TOO_LARGE");
                 }
             }
@@ -370,7 +380,7 @@ namespace RevitPlanningPlugin.Services.Geometry
             return (groups.Count, distribution);
         }
 
-        private static IEnumerable<(string id, double area)> GetApartmentAreas(LayoutVariant variant)
+        private static IEnumerable<(string id, string type, double area)> GetApartmentAreas(LayoutVariant variant)
         {
             return variant.Rooms
                 .Where(room => room.Properties.ContainsKey("apartment_type"))
@@ -378,7 +388,16 @@ namespace RevitPlanningPlugin.Services.Geometry
                                  && !string.IsNullOrWhiteSpace(id)
                     ? id
                     : room.Id)
-                .Select(group => (id: group.Key, area: group.Sum(room => room.Area)));
+                .Select(group =>
+                {
+                    var type = group
+                        .Select(room => room.Properties.TryGetValue("apartment_type", out var apartmentType)
+                            ? apartmentType
+                            : string.Empty)
+                        .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))
+                        ?? string.Empty;
+                    return (id: group.Key, type, area: group.Sum(room => room.Area));
+                });
         }
 
         private static double EstimateMinimumDimension(RoomLayout room)
